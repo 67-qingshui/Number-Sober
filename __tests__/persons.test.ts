@@ -75,10 +75,11 @@ describe("参与人服务", () => {
 
   it("被引用时禁止删除", () => {
     const p = createPerson({ name: "小明" }, dbFile);
-    // 模拟未来 AA 账单表引用该参与人
+    // 迁移 v5 已创建真实的 aa_bills 表,直接插入引用该参与人的账单
     const db = new Database(dbFile);
-    db.exec("CREATE TABLE aa_bills (id TEXT PRIMARY KEY, payer_id TEXT)");
-    db.prepare("INSERT INTO aa_bills VALUES (?, ?)").run("b1", p.id);
+    db.prepare(
+      "INSERT INTO aa_bills (id, title, bill_date, payer_id) VALUES (?, '测试单', '2026-08-01', ?)",
+    ).run("b1", p.id);
     db.close();
 
     expect(() => deletePerson(p.id, dbFile)).toThrow(/引用/);
