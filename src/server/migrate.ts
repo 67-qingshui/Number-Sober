@@ -81,6 +81,13 @@ export const MIGRATIONS: Migration[] = [
           INSERT INTO meta (key, value) VALUES ('schema_version', '5')
             ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
   },
+  {
+    version: 6,
+    name: "aa-bill-settled-at",
+    sql: `ALTER TABLE aa_bills ADD COLUMN settled_at TEXT;
+          INSERT INTO meta (key, value) VALUES ('schema_version', '6')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

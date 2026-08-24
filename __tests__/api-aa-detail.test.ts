@@ -6,6 +6,8 @@ import { createSession } from "@/server/session";
 import { POST as postBill } from "@/app/api/aa/bills/route";
 import { GET, PUT } from "@/app/api/aa/bills/[id]/route";
 import { GET as getSettlement } from "@/app/api/aa/bills/[id]/settlement/route";
+import { PATCH as patchSettle } from "@/app/api/aa/bills/[id]/settle/route";
+import { PATCH as patchUnsettle } from "@/app/api/aa/bills/[id]/unsettle/route";
 
 let mockToken = "";
 vi.mock("next/headers", () => ({
@@ -131,5 +133,37 @@ describe("AA 账单详情 API", () => {
       { params: Promise.resolve({ id: "no-such" }) },
     );
     expect(res.status).toBe(404);
+  });
+
+  it("PATCH settle 结算账单,unsettle 反结算", async () => {
+    const { id } = await createOne();
+
+    const settled = await patchSettle(
+      new Request(`http://localhost/api/aa/bills/${id}/settle`, {
+        method: "PATCH",
+      }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(settled.status).toBe(200);
+    expect((await settled.json()).status).toBe("settled");
+
+    const reopened = await patchUnsettle(
+      new Request(`http://localhost/api/aa/bills/${id}/unsettle`, {
+        method: "PATCH",
+      }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(reopened.status).toBe(200);
+    expect((await reopened.json()).status).toBe("open");
+  });
+
+  it("PATCH settle 不存在的账单返回 400", async () => {
+    const res = await patchSettle(
+      new Request("http://localhost/api/aa/bills/no-such/settle", {
+        method: "PATCH",
+      }),
+      { params: Promise.resolve({ id: "no-such" }) },
+    );
+    expect(res.status).toBe(400);
   });
 });

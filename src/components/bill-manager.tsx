@@ -203,6 +203,34 @@ export function BillManager() {
     if (bRes.ok) setBills(await bRes.json());
   }
 
+  async function handleSettle(bill: Bill) {
+    setError("");
+    const res = await fetch(`/api/aa/bills/${bill.id}/settle`, {
+      method: "PATCH",
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error ?? "操作失败");
+      return;
+    }
+    const bRes = await fetch("/api/aa/bills");
+    if (bRes.ok) setBills(await bRes.json());
+  }
+
+  async function handleUnsettle(bill: Bill) {
+    setError("");
+    const res = await fetch(`/api/aa/bills/${bill.id}/unsettle`, {
+      method: "PATCH",
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error ?? "操作失败");
+      return;
+    }
+    const bRes = await fetch("/api/aa/bills");
+    if (bRes.ok) setBills(await bRes.json());
+  }
+
   async function startEdit(id: string) {
     const res = await fetch(`/api/aa/bills/${id}`);
     if (!res.ok) return;
@@ -360,6 +388,15 @@ export function BillManager() {
               </button>{" "}
               {b.title} — ¥{formatYen(b.total)}(垫付:{personName(b.payerId)})
               {b.status === "settled" ? " · 已结算" : ""}{" "}
+              {b.status === "open" ? (
+                <button type="button" onClick={() => handleSettle(b)}>
+                  结算
+                </button>
+              ) : (
+                <button type="button" onClick={() => handleUnsettle(b)}>
+                  反结算
+                </button>
+              )}{" "}
               <button type="button" onClick={() => startEdit(b.id)}>
                 编辑
               </button>

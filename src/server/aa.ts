@@ -46,6 +46,7 @@ export interface Bill {
   date: string;
   payerId: string;
   status: "open" | "settled";
+  settledAt: string | null;
   total: number;
   items: BillItem[];
 }
@@ -129,9 +130,12 @@ function insertItems(
 function getBillInner(db: Database.Database, id: string): Bill {
   const row = db
     .prepare(
-      "SELECT id, title, bill_date AS date, payer_id AS payerId, status FROM aa_bills WHERE id = ?",
+      "SELECT id, title, bill_date AS date, payer_id AS payerId, status, settled_at AS settledAt FROM aa_bills WHERE id = ?",
     )
-    .get(id) as Pick<Bill, "id" | "title" | "date" | "payerId" | "status"> | undefined;
+    .get(id) as Pick<
+    Bill,
+    "id" | "title" | "date" | "payerId" | "status" | "settledAt"
+  > | undefined;
   if (!row) throw new Error("账单不存在");
 
   const items = db
@@ -152,10 +156,11 @@ function getBillInner(db: Database.Database, id: string): Bill {
 
   return {
     ...row,
+    settledAt: row.settledAt ?? null,
     total: items.reduce((s, i) => s + i.amount, 0),
     items: items as BillItem[],
   };
-}
+  }
 
 export function createBill(input: CreateBillInput, dbPath?: string): Bill {
   const title = input.title.trim();
@@ -210,6 +215,36 @@ export function getSettlement(
   dbPath?: string,
 ): SettlementSummary {
   return computeSettlement(getBill(billId, dbPath));
+}
+
+export function settleBill(id: string, dbPath?: string): Bill {
+  const db = openDb(dbPath);
+  try {
+    runMigrations(db);
+    const bill = getBillInner(db, id);
+    if (bill.status === "settled") throw new Error("账单已结算");
+    db.prepare(
+      "UPDATE aa_bills SET status = 'settled', settled_at = ? WHERE id = ?",
+    ).run(new Date().toISOString(), id);
+    return getBillInner(db, id);
+  } finally {
+    db.close();
+  }
+}
+
+export function unsettleBill(id: string, dbPath?: string): Bill {
+  const db = openDb(dbPath);
+  try {
+    runMigrations(db);
+    const bill = getBillInner(db, id);
+    if (bill.status !== "settled") throw new Error("账单未结算");
+    db.prepare(
+      "UPDATE aa_bills SET status = 'open', settled_at = NULL WHERE id = ?",
+    ).run(id);
+    return getBillInner(db, id);
+  } finally {
+    db.close();
+  }
 }
 
 export function updateBillItems(

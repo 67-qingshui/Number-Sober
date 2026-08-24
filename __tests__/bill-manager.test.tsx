@@ -244,6 +244,47 @@ describe("AA 账单组件", () => {
     expect(screen.getByText(/Bob.*应还 ¥2,000/)).toBeInTheDocument();
   });
 
+  it("结算账单后显示已结算状态,可反结算", async () => {
+    let bills = [
+      { id: "b1", title: "聚餐", date: "2026-08-25", payerId: "p1", status: "open", total: 4000 },
+    ];
+    const fetchMock = vi.fn(async (url: string, opts?: RequestInit) => {
+      if (url === "/api/persons")
+        return { ok: true, json: async () => PERSONS };
+      if (url === "/api/aa/bills" && (!opts || opts.method === "GET"))
+        return { ok: true, json: async () => bills };
+      if (url === "/api/aa/bills/b1/settle" && opts?.method === "PATCH") {
+        bills = [{ ...bills[0], status: "settled" }];
+        return { ok: true, json: async () => bills[0] };
+      }
+      if (url === "/api/aa/bills/b1/unsettle" && opts?.method === "PATCH") {
+        bills = [{ ...bills[0], status: "open" }];
+        return { ok: true, json: async () => bills[0] };
+      }
+      return { ok: false, json: async () => ({ error: "未知" }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<BillManager />);
+    const user = userEvent.setup();
+    await screen.findByText(/聚餐/);
+    await user.click(screen.getByRole("button", { name: /结算/ }));
+    expect(
+      await screen.findByRole("button", { name: "反结算" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText((content: string) => content.includes("已结算")),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /反结算/ }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "反结算" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByText((content: string) => content.includes("已结算")),
+    ).not.toBeInTheDocument();
+  });
+
   it("编辑账单条目并保存(PUT)", async () => {
     const detail = {
       id: "b1",
