@@ -133,6 +133,23 @@ export const MIGRATIONS: Migration[] = [
           INSERT INTO meta (key, value) VALUES ('schema_version', '9')
             ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
   },
+  {
+    version: 10,
+    name: "create-token-entries",
+    sql: `CREATE TABLE IF NOT EXISTS token_entries (
+            id               TEXT PRIMARY KEY,
+            entry_date       TEXT NOT NULL,
+            provider         TEXT NOT NULL,
+            model            TEXT NOT NULL,
+            input_tokens     INTEGER NOT NULL,
+            cache_hit_tokens INTEGER NOT NULL DEFAULT 0,
+            output_tokens    INTEGER NOT NULL,
+            cost             REAL NOT NULL DEFAULT 0,
+            created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+          );
+          INSERT INTO meta (key, value) VALUES ('schema_version', '10')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

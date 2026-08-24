@@ -1,0 +1,95 @@
+import { randomUUID } from "node:crypto";
+import { openDb } from "./db";
+import { runMigrations } from "./migrate";
+
+export interface TokenEntry {
+  id: string;
+  date: string;
+  provider: string;
+  model: string;
+  inputTokens: number;
+  cacheHitTokens: number;
+  outputTokens: number;
+  cost: number;
+  createdAt: string;
+}
+
+export interface CreateTokenEntryInput {
+  date: string;
+  provider: string;
+  model: string;
+  inputTokens: number;
+  cacheHitTokens?: number;
+  outputTokens: number;
+  cost?: number;
+}
+
+function validate(input: CreateTokenEntryInput): void {
+  if (!input.model.trim()) throw new Error("模型名不能为空");
+  if (!input.provider.trim()) throw new Error("提供商不能为空");
+  const nums = [
+    input.inputTokens,
+    input.cacheHitTokens ?? 0,
+    input.outputTokens,
+  ];
+  if (nums.some((n) => !Number.isInteger(n) || n < 0))
+    throw new Error("Token 数量必须是非负整数");
+  if (input.cost !== undefined && (input.cost < 0 || !Number.isFinite(input.cost)))
+    throw new Error("成本不能为负数");
+}
+
+export function createTokenEntry(
+  input: CreateTokenEntryInput,
+  dbPath?: string,
+): TokenEntry {
+  validate(input);
+  const db = openDb(dbPath);
+  try {
+    runMigrations(db);
+    const entry: TokenEntry = {
+      id: randomUUID(),
+      date: input.date,
+      provider: input.provider.trim(),
+      model: input.model.trim(),
+      inputTokens: input.inputTokens,
+      cacheHitTokens: input.cacheHitTokens ?? 0,
+      outputTokens: input.outputTokens,
+      cost: input.cost ?? 0,
+      createdAt: new Date().toISOString(),
+    };
+    db.prepare(
+      `INSERT INTO token_entries (id, entry_date, provider, model, input_tokens, cache_hit_tokens, output_tokens, cost, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      entry.id,
+      entry.date,
+      entry.provider,
+      entry.model,
+      entry.inputTokens,
+      entry.cacheHitTokens,
+      entry.outputTokens,
+      entry.cost,
+      entry.createdAt,
+    );
+    return entry;
+  } finally {
+    db.close();
+  }
+}
+
+export function listTokenEntries(dbPath?: string): TokenEntry[] {
+  const db = openDb(dbPath);
+  try {
+    runMigrations(db);
+    return db
+      .prepare(
+        `SELECT id, entry_date AS date, provider, model, input_tokens AS inputTokens,
+                cache_hit_tokens AS cacheHitTokens, output_tokens AS outputTokens,
+                cost, created_at AS createdAt
+         FROM token_entries ORDER BY entry_date DESC, rowid DESC`,
+      )
+      .all() as TokenEntry[];
+  } finally {
+    db.close();
+  }
+}
