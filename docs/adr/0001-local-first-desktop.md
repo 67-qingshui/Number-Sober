@@ -10,7 +10,7 @@ Number Sober 是个人记账/分账工具,需打包为 macOS dmg(兼容 M5/arm64
 ## 决策
 
 - **Next.js(App Router)+ TypeScript** 作为应用框架,Electron 壳内嵌本地 server(localhost),渲染进程加载本地 URL;electron-builder 打 dmg(arm64)。
-- **SQLite(better-sqlite3)+ Drizzle ORM** 作为本地数据存储,单文件置于用户数据目录。
+- **SQLite(better-sqlite3)直连 + 自制版本化 SQL 迁移** 作为本地数据存储,单文件置于用户数据目录(迁移只增不改、幂等、事务化,见 `src/server/migrate.ts`)。
 - **备份**:应用内一键导出 + 定时自动备份,写入用户指定的 **Google Drive 同步文件夹**,由 Google 桌面客户端自动上云;不引入 OAuth/API。
 
 ## 权衡

@@ -1,0 +1,21 @@
+appId: com.numbersober.app
+productName: Number Sober
+directories:
+  output: release
+files:
+  - .next/**
+  - node_modules/**
+  - electron/**
+  - package.json
+  - next.config.*
+  - public/**
+asarUnpack:
+  - node_modules/better-sqlite3/**
+npmRebuild: false
+mac:
+  target:
+    - dmg
+  category: public.app-category.finance
+  artifactName: ${productName}-${version}-${arch}.${ext}
+dmg:
+  title: ${productName} 明算
