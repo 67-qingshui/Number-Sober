@@ -20,6 +20,18 @@ export const MIGRATIONS: Migration[] = [
           );
           INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', '1');`,
   },
+  {
+    version: 2,
+    name: "create-persons",
+    sql: `CREATE TABLE IF NOT EXISTS persons (
+            id         TEXT PRIMARY KEY,
+            name       TEXT NOT NULL,
+            note       TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+          );
+          INSERT INTO meta (key, value) VALUES ('schema_version', '2')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {
