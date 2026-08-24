@@ -137,4 +137,39 @@ describe("物品管理组件", () => {
       expect(calls.length).toBe(1);
     });
   });
+
+  it("消耗品变更库存并刷新显示", async () => {
+    let stock = 5;
+    const fetchMock = vi.fn(async (url: string, opts?: RequestInit) => {
+      if (url === "/api/items" && (!opts || opts.method === "GET"))
+        return {
+          ok: true,
+          json: async () => [
+            { ...ITEMS[1], stock },
+            { ...ITEMS[0] },
+          ],
+        };
+      if (url === "/api/items/i2/stock" && opts?.method === "POST") {
+        stock = 3;
+        return { ok: true, json: async () => ({ id: "c1", delta: -2 }) };
+      }
+      return { ok: false, json: async () => ({ error: "未知" }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ItemManager />);
+    const user = userEvent.setup();
+    await screen.findByText(/墨盒/);
+    await user.click(screen.getAllByRole("button", { name: /变更库存/ })[0]);
+    await user.type(screen.getByLabelText("变更数量"), "-2");
+    await user.click(screen.getByRole("button", { name: "确认变更" }));
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls.filter(
+        (c) =>
+          c[0] === "/api/items/i2/stock" &&
+          (c[1] as RequestInit)?.method === "POST",
+      );
+      expect(calls.length).toBe(1);
+    });
+    expect(await screen.findByText(/库存 3/)).toBeInTheDocument();
+  });
 });

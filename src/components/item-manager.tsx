@@ -49,6 +49,9 @@ export function ItemManager() {
   const [usageStart, setUsageStart] = useState("");
   const [usageEnd, setUsageEnd] = useState("");
   const [usageNote, setUsageNote] = useState("");
+  const [stockEditingId, setStockEditingId] = useState<string | null>(null);
+  const [stockDelta, setStockDelta] = useState("");
+  const [stockNote, setStockNote] = useState("");
 
   async function load() {
     const res = await fetch("/api/items");
@@ -138,6 +141,24 @@ export function ItemManager() {
     setUsageByItem((prev) => ({ ...prev, [item.id]: list }));
   }
 
+  async function handleStockChange(item: Item) {
+    setError("");
+    const res = await fetch(`/api/items/${item.id}/stock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ delta: Number(stockDelta), note: stockNote }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error ?? "操作失败");
+      return;
+    }
+    setStockEditingId(null);
+    setStockDelta("");
+    setStockNote("");
+    await load();
+  }
+
   return (
     <section>
       <h1>物品</h1>
@@ -218,6 +239,36 @@ export function ItemManager() {
                 </>
               ) : (
                 <>{" · "}{`库存 ${it.stock}`}</>
+              )}{" "}
+              {it.category === "consumable" && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setStockEditingId(stockEditingId === it.id ? null : it.id)
+                  }
+                >
+                  {stockEditingId === it.id ? "收起" : "变更库存"}
+                </button>
+              )}{" "}
+              {stockEditingId === it.id && (
+                <span>
+                  <input
+                    type="number"
+                    value={stockDelta}
+                    onChange={(e) => setStockDelta(e.target.value)}
+                    placeholder="数量(负=消耗)"
+                    aria-label="变更数量"
+                  />
+                  <input
+                    value={stockNote}
+                    onChange={(e) => setStockNote(e.target.value)}
+                    placeholder="备注(可选)"
+                    aria-label="变更备注"
+                  />
+                  <button type="button" onClick={() => handleStockChange(it)}>
+                    确认变更
+                  </button>
+                </span>
               )}{" "}
               <button type="button" onClick={() => toggleUsage(it)}>
                 {expandedUsageId === it.id ? "收起记录" : "使用记录"}
