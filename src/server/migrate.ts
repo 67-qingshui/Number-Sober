@@ -43,6 +43,16 @@ export const MIGRATIONS: Migration[] = [
           INSERT INTO meta (key, value) VALUES ('schema_version', '3')
             ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
   },
+  {
+    version: 4,
+    name: "create-sessions",
+    sql: `CREATE TABLE IF NOT EXISTS sessions (
+            id         TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+          );
+          INSERT INTO meta (key, value) VALUES ('schema_version', '4')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {
