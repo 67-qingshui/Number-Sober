@@ -104,6 +104,21 @@ export const MIGRATIONS: Migration[] = [
           INSERT INTO meta (key, value) VALUES ('schema_version', '7')
             ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
   },
+  {
+    version: 8,
+    name: "create-usage-records",
+    sql: `CREATE TABLE IF NOT EXISTS usage_records (
+            id         TEXT PRIMARY KEY,
+            item_id    TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+            start_at   TEXT NOT NULL,
+            end_at     TEXT NOT NULL,
+            note       TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+          );
+          CREATE INDEX IF NOT EXISTS idx_usage_item ON usage_records(item_id, start_at);
+          INSERT INTO meta (key, value) VALUES ('schema_version', '8')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

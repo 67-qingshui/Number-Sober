@@ -96,4 +96,45 @@ describe("物品管理组件", () => {
       expect(screen.queryByText(/打印机/)).not.toBeInTheDocument(),
     );
   });
+
+  it("展开物品显示使用记录并添加新记录", async () => {
+    const usage = [
+      {
+        id: "r1",
+        itemId: "i1",
+        startAt: "2026-08-01T10:00:00",
+        endAt: "2026-08-01T12:00:00",
+        note: "打印文档",
+        createdAt: "",
+      },
+    ];
+    const fetchMock = vi.fn(async (url: string, opts?: RequestInit) => {
+      if (url === "/api/items" && (!opts || opts.method === "GET"))
+        return { ok: true, json: async () => ITEMS };
+      if (url === "/api/items/i1/usage" && (!opts || opts.method === "GET"))
+        return { ok: true, json: async () => usage };
+      if (url === "/api/items/i1/usage" && opts?.method === "POST")
+        return { ok: true, json: async () => ({ id: "r2" }) };
+      return { ok: false, json: async () => ({ error: "未知" }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ItemManager />);
+    const user = userEvent.setup();
+    await screen.findByText(/打印机/);
+    await user.click(screen.getAllByRole("button", { name: /使用记录/ })[0]);
+    expect(await screen.findByText(/打印文档/)).toBeInTheDocument();
+    expect(screen.getByText(/2小时0分/)).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("开始时间"), "2026-08-02T10:00");
+    await user.type(screen.getByLabelText("结束时间"), "2026-08-02T10:30");
+    await user.click(screen.getByRole("button", { name: "添加记录" }));
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls.filter(
+        (c) =>
+          c[0] === "/api/items/i1/usage" &&
+          (c[1] as RequestInit)?.method === "POST",
+      );
+      expect(calls.length).toBe(1);
+    });
+  });
 });
