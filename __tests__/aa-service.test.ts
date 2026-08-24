@@ -122,4 +122,103 @@ describe("AA 账单服务", () => {
     expect(bills).toHaveLength(2);
     expect(bills[0].title).toBe("第二单");
   });
+
+  it("amount 模式:按自定义金额分摊", () => {
+    const bill = createBill(
+      {
+        title: "定制",
+        date: "2026-08-25",
+        payerId: alice,
+        items: [
+          {
+            description: "购物",
+            amount: 5000,
+            splitMode: "amount",
+            shares: [
+              { personId: alice, share: 3000 },
+              { personId: bob, share: 2000 },
+            ],
+          },
+        ],
+      },
+      dbFile,
+    );
+    expect(bill.items[0].splitMode).toBe("amount");
+    expect(bill.items[0].participants).toEqual([
+      { personId: alice, share: 3000 },
+      { personId: bob, share: 2000 },
+    ]);
+  });
+
+  it("amount 模式份额和与金额不符抛错", () => {
+    expect(() =>
+      createBill(
+        {
+          title: "定制",
+          date: "2026-08-25",
+          payerId: alice,
+          items: [
+            {
+              description: "购物",
+              amount: 5000,
+              splitMode: "amount",
+              shares: [
+                { personId: alice, share: 3000 },
+                { personId: bob, share: 1000 },
+              ],
+            },
+          ],
+        },
+        dbFile,
+      ),
+    ).toThrow(/合计/);
+  });
+
+  it("ratio 模式:按权重分摊", () => {
+    const bill = createBill(
+      {
+        title: "按比例",
+        date: "2026-08-25",
+        payerId: alice,
+        items: [
+          {
+            description: "房租",
+            amount: 5000,
+            splitMode: "ratio",
+            shares: [
+              { personId: alice, share: 3 },
+              { personId: bob, share: 2 },
+            ],
+          },
+        ],
+      },
+      dbFile,
+    );
+    expect(bill.items[0].splitMode).toBe("ratio");
+    expect(bill.items[0].participants).toEqual([
+      { personId: alice, share: 3000 },
+      { personId: bob, share: 2000 },
+    ]);
+  });
+
+  it("shares 引用不存在的参与人抛错", () => {
+    expect(() =>
+      createBill(
+        {
+          title: "异常",
+          date: "2026-08-25",
+          payerId: alice,
+          items: [
+            {
+              description: "x",
+              amount: 100,
+              splitMode: "amount",
+              shares: [{ personId: "no-such", share: 100 }],
+            },
+          ],
+        },
+        dbFile,
+      ),
+    ).toThrow(/参与人不存在/);
+  });
 });

@@ -2,12 +2,24 @@ import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { openDb } from "./db";
 import { runMigrations } from "./migrate";
-import { splitEqual, type SplitMode } from "@/lib/aa";
+import {
+  splitEqual,
+  splitByRatio,
+  validateAmountShares,
+  type SplitMode,
+} from "@/lib/aa";
+
+export interface BillItemShare {
+  personId: string;
+  share: number;
+}
 
 export interface BillItemInput {
   description: string;
   amount: number;
-  participants: string[]; // 04a:均分参与人;04b 扩展自定义份额
+  participants?: string[]; // equal 模式使用
+  splitMode?: SplitMode; // 默认 equal
+  shares?: BillItemShare[]; // amount/ratio 模式使用
 }
 
 export interface CreateBillInput {
@@ -62,31 +74,66 @@ export function createBill(input: CreateBillInput, dbPath?: string): Bill {
         const amount = item.amount;
         if (!Number.isInteger(amount) || amount <= 0)
           throw new Error("金额必须为正整数");
-        if (item.participants.length === 0)
-          throw new Error("条目至少需要一个参与人");
-        for (const pid of item.participants) {
-          if (!personExists(db, pid)) throw new Error("参与人不存在");
+
+        const mode: SplitMode = item.splitMode ?? "equal";
+        let computed: { personId: string; share: number }[];
+
+        if (mode === "equal") {
+          const participants = item.participants ?? [];
+          if (participants.length === 0)
+            throw new Error("条目至少需要一个参与人");
+          for (const pid of participants) {
+            if (!personExists(db, pid)) throw new Error("参与人不存在");
+          }
+          const shares = splitEqual(amount, participants.length);
+          computed = participants.map((pid, i) => ({
+            personId: pid,
+            share: shares[i],
+          }));
+        } else {
+          const shares = item.shares ?? [];
+          if (shares.length === 0)
+            throw new Error("条目至少需要一个参与人份额");
+          for (const s of shares) {
+            if (!personExists(db, s.personId))
+              throw new Error("参与人不存在");
+          }
+          if (mode === "amount") {
+            validateAmountShares(
+              amount,
+              shares.map((s) => s.share),
+            );
+            computed = shares.map((s) => ({ ...s }));
+          } else {
+            // ratio
+            const allocated = splitByRatio(
+              amount,
+              shares.map((s) => s.share),
+            );
+            computed = shares.map((s, i) => ({
+              personId: s.personId,
+              share: allocated[i],
+            }));
+          }
         }
 
         const itemId = randomUUID();
         db.prepare(
-          "INSERT INTO aa_bill_items (id, bill_id, description, amount, split_mode, position) VALUES (?, ?, ?, ?, 'equal', ?)",
-        ).run(itemId, billId, item.description.trim(), amount, idx);
+          "INSERT INTO aa_bill_items (id, bill_id, description, amount, split_mode, position) VALUES (?, ?, ?, ?, ?, ?)",
+        ).run(itemId, billId, item.description.trim(), amount, mode, idx);
 
-        const shares = splitEqual(amount, item.participants.length);
-        const participants = item.participants.map((pid, i) => {
+        for (const c of computed) {
           db.prepare(
             "INSERT INTO aa_bill_item_participants (item_id, person_id, share) VALUES (?, ?, ?)",
-          ).run(itemId, pid, shares[i]);
-          return { personId: pid, share: shares[i] };
-        });
+          ).run(itemId, c.personId, c.share);
+        }
         items.push({
           id: itemId,
           billId,
           description: item.description.trim(),
           amount,
-          splitMode: "equal",
-          participants,
+          splitMode: mode,
+          participants: computed,
         });
       });
 

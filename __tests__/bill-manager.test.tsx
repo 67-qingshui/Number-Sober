@@ -82,4 +82,48 @@ describe("AA 账单组件", () => {
     });
     expect(await screen.findByText(/旅行/)).toBeInTheDocument();
   });
+
+  it("amount 模式:勾选参与人并填自定义金额提交", async () => {
+    const created = {
+      id: "b3",
+      title: "购物",
+      date: "2026-08-25",
+      payerId: "p1",
+      status: "open",
+      total: 5000,
+    };
+    const fetchMock = mockFetchWith(created);
+    vi.stubGlobal("fetch", fetchMock);
+    render(<BillManager />);
+    const user = userEvent.setup();
+
+    await screen.findByLabelText("标题");
+    await user.type(screen.getByLabelText("标题"), "购物");
+    await user.selectOptions(screen.getByLabelText("垫付人"), "p1");
+    await user.type(screen.getByLabelText("条目 1 描述"), "购物");
+    await user.type(screen.getByLabelText("条目 1 金额"), "5000");
+    await user.selectOptions(
+      screen.getByLabelText("条目 1 分摊方式"),
+      "amount",
+    );
+    await user.click(screen.getByLabelText("参与人 Alice(条目 1)"));
+    await user.click(screen.getByLabelText("参与人 Bob(条目 1)"));
+    await user.type(screen.getByLabelText("份额 Alice(条目 1)"), "3000");
+    await user.type(screen.getByLabelText("份额 Bob(条目 1)"), "2000");
+
+    await user.click(screen.getByRole("button", { name: "创建账单" }));
+
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls.filter(
+        (c) => c[0] === "/api/aa/bills" && (c[1] as RequestInit)?.method === "POST",
+      );
+      expect(calls.length).toBe(1);
+      const body = JSON.parse((calls[0][1] as RequestInit).body as string);
+      expect(body.items[0].splitMode).toBe("amount");
+      expect(body.items[0].shares).toEqual([
+        { personId: "p1", share: 3000 },
+        { personId: "p2", share: 2000 },
+      ]);
+    });
+  });
 });

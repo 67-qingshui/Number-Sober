@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+type SplitMode = "equal" | "amount" | "ratio";
+
 interface Person {
   id: string;
   name: string;
@@ -21,7 +23,9 @@ interface Bill {
 interface BillItemInput {
   description: string;
   amount: string;
+  splitMode: SplitMode;
   participants: string[];
+  shareValues: Record<string, string>;
 }
 
 function formatYen(n: number): string {
@@ -35,7 +39,7 @@ export function BillManager() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [payerId, setPayerId] = useState("");
   const [items, setItems] = useState<BillItemInput[]>([
-    { description: "", amount: "", participants: [] },
+    { description: "", amount: "", splitMode: "equal", participants: [], shareValues: {} },
   ]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -77,23 +81,45 @@ export function BillManager() {
     );
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    const payload = {
+  function setShareValue(idx: number, pid: string, value: string) {
+    setItems((prev) =>
+      prev.map((it, i) =>
+        i === idx
+          ? { ...it, shareValues: { ...it.shareValues, [pid]: value } }
+          : it,
+      ),
+    );
+  }
+
+  function buildPayload() {
+    return {
       title,
       date,
       payerId,
-      items: items.map((it) => ({
-        description: it.description,
-        amount: Number(it.amount),
-        participants: it.participants,
-      })),
+      items: items.map((it) => {
+        const base = { description: it.description, amount: Number(it.amount) };
+        if (it.splitMode === "equal") {
+          return { ...base, participants: it.participants };
+        }
+        return {
+          ...base,
+          splitMode: it.splitMode,
+          shares: it.participants.map((pid) => ({
+            personId: pid,
+            share: Number(it.shareValues[pid] ?? 0),
+          })),
+        };
+      }),
     };
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
     const res = await fetch("/api/aa/bills", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(buildPayload()),
     });
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
@@ -101,7 +127,9 @@ export function BillManager() {
       return;
     }
     setTitle("");
-    setItems([{ description: "", amount: "", participants: [] }]);
+    setItems([
+      { description: "", amount: "", splitMode: "equal", participants: [], shareValues: {} },
+    ]);
     const bRes = await fetch("/api/aa/bills");
     if (bRes.ok) setBills(await bRes.json());
   }
@@ -154,17 +182,43 @@ export function BillManager() {
               placeholder="金额(日元)"
               aria-label={`条目 ${idx + 1} 金额`}
             />
+            <select
+              value={it.splitMode}
+              onChange={(e) =>
+                updateItem(idx, { splitMode: e.target.value as SplitMode })
+              }
+              aria-label={`条目 ${idx + 1} 分摊方式`}
+            >
+              <option value="equal">均分</option>
+              <option value="amount">自定义金额</option>
+              <option value="ratio">比例权重</option>
+            </select>
             <div>
               {persons.map((p) => (
-                <label key={p.id}>
-                  <input
-                    type="checkbox"
-                    checked={it.participants.includes(p.id)}
-                    onChange={() => toggleParticipant(idx, p.id)}
-                    aria-label={`参与人 ${p.name}(条目 ${idx + 1})`}
-                  />
-                  {p.name}
-                </label>
+                <div key={p.id}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={it.participants.includes(p.id)}
+                      onChange={() => toggleParticipant(idx, p.id)}
+                      aria-label={`参与人 ${p.name}(条目 ${idx + 1})`}
+                    />
+                    {p.name}
+                  </label>
+                  {it.splitMode !== "equal" &&
+                    it.participants.includes(p.id) && (
+                      <input
+                        type="number"
+                        min={1}
+                        value={it.shareValues[p.id] ?? ""}
+                        onChange={(e) => setShareValue(idx, p.id, e.target.value)}
+                        placeholder={
+                          it.splitMode === "amount" ? "金额(日元)" : "权重,如 2"
+                        }
+                        aria-label={`${it.splitMode === "amount" ? "份额" : "权重"} ${p.name}(条目 ${idx + 1})`}
+                      />
+                    )}
+                </div>
               ))}
             </div>
             {items.length > 1 && (
@@ -184,7 +238,7 @@ export function BillManager() {
           onClick={() =>
             setItems((prev) => [
               ...prev,
-              { description: "", amount: "", participants: [] },
+              { description: "", amount: "", splitMode: "equal", participants: [], shareValues: {} },
             ])
           }
         >
