@@ -53,6 +53,34 @@ export const MIGRATIONS: Migration[] = [
           INSERT INTO meta (key, value) VALUES ('schema_version', '4')
             ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
   },
+  {
+    version: 5,
+    name: "create-aa",
+    sql: `CREATE TABLE IF NOT EXISTS aa_bills (
+            id         TEXT PRIMARY KEY,
+            title      TEXT NOT NULL,
+            bill_date  TEXT NOT NULL,
+            payer_id   TEXT NOT NULL REFERENCES persons(id),
+            status     TEXT NOT NULL DEFAULT 'open',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+          );
+          CREATE TABLE IF NOT EXISTS aa_bill_items (
+            id          TEXT PRIMARY KEY,
+            bill_id     TEXT NOT NULL REFERENCES aa_bills(id) ON DELETE CASCADE,
+            description TEXT NOT NULL,
+            amount      INTEGER NOT NULL,
+            split_mode  TEXT NOT NULL DEFAULT 'equal',
+            position    INTEGER NOT NULL DEFAULT 0
+          );
+          CREATE TABLE IF NOT EXISTS aa_bill_item_participants (
+            item_id   TEXT NOT NULL REFERENCES aa_bill_items(id) ON DELETE CASCADE,
+            person_id TEXT NOT NULL REFERENCES persons(id),
+            share     REAL,
+            PRIMARY KEY (item_id, person_id)
+          );
+          INSERT INTO meta (key, value) VALUES ('schema_version', '5')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {
