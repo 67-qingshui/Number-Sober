@@ -88,6 +88,22 @@ export const MIGRATIONS: Migration[] = [
           INSERT INTO meta (key, value) VALUES ('schema_version', '6')
             ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
   },
+  {
+    version: 7,
+    name: "create-items",
+    sql: `CREATE TABLE IF NOT EXISTS items (
+            id              TEXT PRIMARY KEY,
+            name            TEXT NOT NULL,
+            category        TEXT NOT NULL DEFAULT 'asset',
+            purchase_price  INTEGER NOT NULL,
+            purchase_date   TEXT NOT NULL,
+            lifespan_months INTEGER,
+            stock           INTEGER,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+          );
+          INSERT INTO meta (key, value) VALUES ('schema_version', '7')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {
