@@ -126,4 +126,103 @@ describe("AA 账单组件", () => {
       ]);
     });
   });
+
+  it("点击账单展开条目明细(描述与份额)", async () => {
+    const detail = {
+      id: "b1",
+      title: "聚餐",
+      date: "2026-08-25",
+      payerId: "p1",
+      status: "open",
+      total: 4000,
+      items: [
+        {
+          id: "i1",
+          billId: "b1",
+          description: "晚餐",
+          amount: 4000,
+          splitMode: "equal",
+          participants: [
+            { personId: "p1", share: 2000 },
+            { personId: "p2", share: 2000 },
+          ],
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/persons")
+          return { ok: true, json: async () => PERSONS };
+        if (url === "/api/aa/bills")
+          return {
+            ok: true,
+            json: async () => [{ id: "b1", title: "聚餐", date: "2026-08-25", payerId: "p1", status: "open", total: 4000 }],
+          };
+        if (url === "/api/aa/bills/b1")
+          return { ok: true, json: async () => detail };
+        return { ok: false, json: async () => ({}) };
+      }),
+    );
+    render(<BillManager />);
+    const user = userEvent.setup();
+    await screen.findByText(/聚餐/);
+    await user.click(screen.getByRole("button", { name: /展开/ }));
+    expect(await screen.findByText(/晚餐/)).toBeInTheDocument();
+    expect(screen.getAllByText(/2,000/).length).toBeGreaterThan(0);
+  });
+
+  it("编辑账单条目并保存(PUT)", async () => {
+    const detail = {
+      id: "b1",
+      title: "聚餐",
+      date: "2026-08-25",
+      payerId: "p1",
+      status: "open",
+      total: 4000,
+      items: [
+        {
+          id: "i1",
+          billId: "b1",
+          description: "晚餐",
+          amount: 4000,
+          splitMode: "equal",
+          participants: [{ personId: "p1", share: 4000 }],
+        },
+      ],
+    };
+    const fetchMock = vi.fn(async (url: string, opts?: RequestInit) => {
+      if (url === "/api/persons")
+        return { ok: true, json: async () => PERSONS };
+      if (url === "/api/aa/bills" && (!opts || opts.method === "GET"))
+        return {
+          ok: true,
+          json: async () => [{ id: "b1", title: "聚餐", date: "2026-08-25", payerId: "p1", status: "open", total: 4000 }],
+        };
+      if (url === "/api/aa/bills/b1" && (!opts || opts.method === "GET"))
+        return { ok: true, json: async () => detail };
+      if (url === "/api/aa/bills/b1" && opts?.method === "PUT")
+        return {
+          ok: true,
+          json: async () => ({ ...detail, total: 5000 }),
+        };
+      return { ok: false, json: async () => ({ error: "未知" }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<BillManager />);
+    const user = userEvent.setup();
+    await screen.findByText(/聚餐/);
+    await user.click(screen.getByRole("button", { name: /编辑/ }));
+    await user.clear(screen.getByLabelText("条目 1 金额"));
+    await user.type(screen.getByLabelText("条目 1 金额"), "5000");
+    await user.click(screen.getByRole("button", { name: "保存修改" }));
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls.filter(
+        (c) => c[0] === "/api/aa/bills/b1" && (c[1] as RequestInit)?.method === "PUT",
+      );
+      expect(calls.length).toBe(1);
+      const body = JSON.parse((calls[0][1] as RequestInit).body as string);
+      expect(body.items[0].amount).toBe(5000);
+    });
+  });
 });

@@ -52,6 +52,109 @@ function personExists(db: Database.Database, id: string): boolean {
   return !!db.prepare("SELECT id FROM persons WHERE id = ?").get(id);
 }
 
+/** 计算条目参与人份额(按分摊模式),校验输入合法性。 */
+function computeItemParticipants(
+  db: Database.Database,
+  item: BillItemInput,
+): { personId: string; share: number }[] {
+  const amount = item.amount;
+  if (!Number.isInteger(amount) || amount <= 0)
+    throw new Error("金额必须为正整数");
+
+  const mode: SplitMode = item.splitMode ?? "equal";
+
+  if (mode === "equal") {
+    const participants = item.participants ?? [];
+    if (participants.length === 0)
+      throw new Error("条目至少需要一个参与人");
+    for (const pid of participants) {
+      if (!personExists(db, pid)) throw new Error("参与人不存在");
+    }
+    const shares = splitEqual(amount, participants.length);
+    return participants.map((pid, i) => ({ personId: pid, share: shares[i] }));
+  }
+
+  const shares = item.shares ?? [];
+  if (shares.length === 0) throw new Error("条目至少需要一个参与人份额");
+  for (const s of shares) {
+    if (!personExists(db, s.personId)) throw new Error("参与人不存在");
+  }
+  if (mode === "amount") {
+    validateAmountShares(
+      amount,
+      shares.map((s) => s.share),
+    );
+    return shares.map((s) => ({ ...s }));
+  }
+  // ratio
+  const allocated = splitByRatio(
+    amount,
+    shares.map((s) => s.share),
+  );
+  return shares.map((s, i) => ({ personId: s.personId, share: allocated[i] }));
+}
+
+/** 在事务内插入账单条目与参与人份额,返回完整条目对象。 */
+function insertItems(
+  db: Database.Database,
+  billId: string,
+  items: BillItemInput[],
+): BillItem[] {
+  return items.map((item, idx) => {
+    const computed = computeItemParticipants(db, item);
+    const itemId = randomUUID();
+    const mode: SplitMode = item.splitMode ?? "equal";
+    db.prepare(
+      "INSERT INTO aa_bill_items (id, bill_id, description, amount, split_mode, position) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run(itemId, billId, item.description.trim(), item.amount, mode, idx);
+
+    for (const c of computed) {
+      db.prepare(
+        "INSERT INTO aa_bill_item_participants (item_id, person_id, share) VALUES (?, ?, ?)",
+      ).run(itemId, c.personId, c.share);
+    }
+    return {
+      id: itemId,
+      billId,
+      description: item.description.trim(),
+      amount: item.amount,
+      splitMode: mode,
+      participants: computed,
+    };
+  });
+}
+
+function getBillInner(db: Database.Database, id: string): Bill {
+  const row = db
+    .prepare(
+      "SELECT id, title, bill_date AS date, payer_id AS payerId, status FROM aa_bills WHERE id = ?",
+    )
+    .get(id) as Pick<Bill, "id" | "title" | "date" | "payerId" | "status"> | undefined;
+  if (!row) throw new Error("账单不存在");
+
+  const items = db
+    .prepare(
+      "SELECT id, bill_id AS billId, description, amount, split_mode AS splitMode FROM aa_bill_items WHERE bill_id = ? ORDER BY position",
+    )
+    .all(id) as Omit<BillItem, "participants">[];
+
+  const partsStmt = db.prepare(
+    "SELECT person_id AS personId, share FROM aa_bill_item_participants WHERE item_id = ? ORDER BY rowid",
+  );
+  for (const item of items) {
+    item.participants = partsStmt.all(item.id) as {
+      personId: string;
+      share: number;
+    }[];
+  }
+
+  return {
+    ...row,
+    total: items.reduce((s, i) => s + i.amount, 0),
+    items: items as BillItem[],
+  };
+}
+
 export function createBill(input: CreateBillInput, dbPath?: string): Bill {
   const title = input.title.trim();
   if (!title) throw new Error("标题不能为空");
@@ -63,80 +166,13 @@ export function createBill(input: CreateBillInput, dbPath?: string): Bill {
     if (!personExists(db, input.payerId)) throw new Error("垫付人不存在");
 
     const billId = randomUUID();
-    const items: BillItem[] = [];
+    let items: BillItem[] = [];
     db.exec("BEGIN");
     try {
       db.prepare(
         "INSERT INTO aa_bills (id, title, bill_date, payer_id) VALUES (?, ?, ?, ?)",
       ).run(billId, title, input.date, input.payerId);
-
-      input.items.forEach((item, idx) => {
-        const amount = item.amount;
-        if (!Number.isInteger(amount) || amount <= 0)
-          throw new Error("金额必须为正整数");
-
-        const mode: SplitMode = item.splitMode ?? "equal";
-        let computed: { personId: string; share: number }[];
-
-        if (mode === "equal") {
-          const participants = item.participants ?? [];
-          if (participants.length === 0)
-            throw new Error("条目至少需要一个参与人");
-          for (const pid of participants) {
-            if (!personExists(db, pid)) throw new Error("参与人不存在");
-          }
-          const shares = splitEqual(amount, participants.length);
-          computed = participants.map((pid, i) => ({
-            personId: pid,
-            share: shares[i],
-          }));
-        } else {
-          const shares = item.shares ?? [];
-          if (shares.length === 0)
-            throw new Error("条目至少需要一个参与人份额");
-          for (const s of shares) {
-            if (!personExists(db, s.personId))
-              throw new Error("参与人不存在");
-          }
-          if (mode === "amount") {
-            validateAmountShares(
-              amount,
-              shares.map((s) => s.share),
-            );
-            computed = shares.map((s) => ({ ...s }));
-          } else {
-            // ratio
-            const allocated = splitByRatio(
-              amount,
-              shares.map((s) => s.share),
-            );
-            computed = shares.map((s, i) => ({
-              personId: s.personId,
-              share: allocated[i],
-            }));
-          }
-        }
-
-        const itemId = randomUUID();
-        db.prepare(
-          "INSERT INTO aa_bill_items (id, bill_id, description, amount, split_mode, position) VALUES (?, ?, ?, ?, ?, ?)",
-        ).run(itemId, billId, item.description.trim(), amount, mode, idx);
-
-        for (const c of computed) {
-          db.prepare(
-            "INSERT INTO aa_bill_item_participants (item_id, person_id, share) VALUES (?, ?, ?)",
-          ).run(itemId, c.personId, c.share);
-        }
-        items.push({
-          id: itemId,
-          billId,
-          description: item.description.trim(),
-          amount,
-          splitMode: mode,
-          participants: computed,
-        });
-      });
-
+      items = insertItems(db, billId, input.items);
       db.exec("COMMIT");
     } catch (err) {
       db.exec("ROLLBACK");
@@ -149,9 +185,45 @@ export function createBill(input: CreateBillInput, dbPath?: string): Bill {
       date: input.date,
       payerId: input.payerId,
       status: "open",
-      total: input.items.reduce((s, i) => s + i.amount, 0),
+      total: items.reduce((s, i) => s + i.amount, 0),
       items,
     };
+  } finally {
+    db.close();
+  }
+}
+
+export function getBill(id: string, dbPath?: string): Bill {
+  const db = openDb(dbPath);
+  try {
+    runMigrations(db);
+    return getBillInner(db, id);
+  } finally {
+    db.close();
+  }
+}
+
+export function updateBillItems(
+  id: string,
+  items: BillItemInput[],
+  dbPath?: string,
+): Bill {
+  if (items.length === 0) throw new Error("至少需要一个条目");
+  const db = openDb(dbPath);
+  try {
+    runMigrations(db);
+    if (!db.prepare("SELECT id FROM aa_bills WHERE id = ?").get(id))
+      throw new Error("账单不存在");
+    db.exec("BEGIN");
+    try {
+      db.prepare("DELETE FROM aa_bill_items WHERE bill_id = ?").run(id);
+      insertItems(db, id, items);
+      db.exec("COMMIT");
+      return getBillInner(db, id);
+    } catch (err) {
+      db.exec("ROLLBACK");
+      throw err;
+    }
   } finally {
     db.close();
   }

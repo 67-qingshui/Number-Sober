@@ -20,6 +20,19 @@ interface Bill {
   total: number;
 }
 
+interface BillItem {
+  id: string;
+  billId: string;
+  description: string;
+  amount: number;
+  splitMode: SplitMode;
+  participants: { personId: string; share: number }[];
+}
+
+interface BillDetail extends Bill {
+  items: BillItem[];
+}
+
 interface BillItemInput {
   description: string;
   amount: string;
@@ -28,19 +41,46 @@ interface BillItemInput {
   shareValues: Record<string, string>;
 }
 
+const EMPTY_ITEM = (): BillItemInput => ({
+  description: "",
+  amount: "",
+  splitMode: "equal",
+  participants: [],
+  shareValues: {},
+});
+
 function formatYen(n: number): string {
   return n.toLocaleString("ja-JP");
 }
 
+function billToForm(bill: BillDetail): BillItemInput[] {
+  return bill.items.map((it) => ({
+    description: it.description,
+    amount: String(it.amount),
+    splitMode: it.splitMode,
+    participants: it.participants.map((p) => p.personId),
+    shareValues: Object.fromEntries(
+      it.participants.map((p) => [p.personId, String(p.share)]),
+    ),
+  }));
+}
+
+const MODE_LABEL: Record<SplitMode, string> = {
+  equal: "均分",
+  amount: "自定义金额",
+  ratio: "比例权重",
+};
+
 export function BillManager() {
   const [persons, setPersons] = useState<Person[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
+  const [details, setDetails] = useState<Record<string, BillDetail>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [payerId, setPayerId] = useState("");
-  const [items, setItems] = useState<BillItemInput[]>([
-    { description: "", amount: "", splitMode: "equal", participants: [], shareValues: {} },
-  ]);
+  const [items, setItems] = useState<BillItemInput[]>([EMPTY_ITEM()]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -91,47 +131,92 @@ export function BillManager() {
     );
   }
 
-  function buildPayload() {
-    return {
-      title,
-      date,
-      payerId,
-      items: items.map((it) => {
-        const base = { description: it.description, amount: Number(it.amount) };
-        if (it.splitMode === "equal") {
-          return { ...base, participants: it.participants };
-        }
-        return {
-          ...base,
-          splitMode: it.splitMode,
-          shares: it.participants.map((pid) => ({
-            personId: pid,
-            share: Number(it.shareValues[pid] ?? 0),
-          })),
-        };
-      }),
-    };
+  function buildItemsPayload() {
+    return items.map((it) => {
+      const base = { description: it.description, amount: Number(it.amount) };
+      if (it.splitMode === "equal") {
+        return { ...base, participants: it.participants };
+      }
+      return {
+        ...base,
+        splitMode: it.splitMode,
+        shares: it.participants.map((pid) => ({
+          personId: pid,
+          share: Number(it.shareValues[pid] ?? 0),
+        })),
+      };
+    });
+  }
+
+  function resetForm() {
+    setEditingId(null);
+    setTitle("");
+    setItems([EMPTY_ITEM()]);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    const res = await fetch("/api/aa/bills", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(buildPayload()),
-    });
-    if (!res.ok) {
-      const d = await res.json().catch(() => ({}));
-      setError(d.error ?? "创建失败");
-      return;
+    const payload = {
+      title,
+      date,
+      payerId,
+      items: buildItemsPayload(),
+    };
+
+    if (editingId) {
+      const res = await fetch(`/api/aa/bills/${editingId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: payload.items }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? "保存失败");
+        return;
+      }
+      resetForm();
+    } else {
+      const res = await fetch("/api/aa/bills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? "创建失败");
+        return;
+      }
+      resetForm();
     }
-    setTitle("");
-    setItems([
-      { description: "", amount: "", splitMode: "equal", participants: [], shareValues: {} },
-    ]);
     const bRes = await fetch("/api/aa/bills");
     if (bRes.ok) setBills(await bRes.json());
+  }
+
+  async function startEdit(id: string) {
+    const res = await fetch(`/api/aa/bills/${id}`);
+    if (!res.ok) return;
+    const bill = (await res.json()) as BillDetail;
+    setEditingId(id);
+    setTitle(bill.title);
+    setDate(bill.date);
+    setPayerId(bill.payerId);
+    setItems(billToForm(bill));
+  }
+
+  async function toggleExpand(bill: Bill) {
+    if (expandedId === bill.id) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(bill.id);
+    if (!details[bill.id]) {
+      const res = await fetch(`/api/aa/bills/${bill.id}`);
+      if (res.ok) {
+        const d = (await res.json()) as BillDetail;
+        setDetails((prev) => ({ ...prev, [bill.id]: d }));
+      }
+    }
   }
 
   const personName = (id: string) =>
@@ -235,16 +320,16 @@ export function BillManager() {
         ))}
         <button
           type="button"
-          onClick={() =>
-            setItems((prev) => [
-              ...prev,
-              { description: "", amount: "", splitMode: "equal", participants: [], shareValues: {} },
-            ])
-          }
+          onClick={() => setItems((prev) => [...prev, EMPTY_ITEM()])}
         >
           添加条目
         </button>
-        <button type="submit">创建账单</button>
+        <button type="submit">{editingId ? "保存修改" : "创建账单"}</button>
+        {editingId && (
+          <button type="button" onClick={resetForm}>
+            取消编辑
+          </button>
+        )}
       </form>
       {error && <p role="alert">{error}</p>}
       {loading ? (
@@ -253,8 +338,30 @@ export function BillManager() {
         <ul>
           {bills.map((b) => (
             <li key={b.id}>
+              <button type="button" onClick={() => toggleExpand(b)}>
+                {expandedId === b.id ? "收起" : "展开"}
+              </button>{" "}
               {b.title} — ¥{formatYen(b.total)}(垫付:{personName(b.payerId)})
-              {b.status === "settled" ? " · 已结算" : ""}
+              {b.status === "settled" ? " · 已结算" : ""}{" "}
+              <button type="button" onClick={() => startEdit(b.id)}>
+                编辑
+              </button>
+              {expandedId === b.id && details[b.id] && (
+                <ul>
+                  {details[b.id].items.map((it) => (
+                    <li key={it.id}>
+                      {it.description} ¥{formatYen(it.amount)}[
+                      {MODE_LABEL[it.splitMode]}] —{" "}
+                      {it.participants
+                        .map(
+                          (p) =>
+                            `${personName(p.personId)} ¥${formatYen(p.share)}`,
+                        )
+                        .join("、")}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
           ))}
         </ul>
