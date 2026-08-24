@@ -5,6 +5,7 @@ import { createPerson } from "@/server/persons";
 import { createSession } from "@/server/session";
 import { POST as postBill } from "@/app/api/aa/bills/route";
 import { GET, PUT } from "@/app/api/aa/bills/[id]/route";
+import { GET as getSettlement } from "@/app/api/aa/bills/[id]/settlement/route";
 
 let mockToken = "";
 vi.mock("next/headers", () => ({
@@ -94,5 +95,41 @@ describe("AA 账单详情 API", () => {
       { params: Promise.resolve({ id }) },
     );
     expect(res.status).toBe(400);
+  });
+
+  it("GET settlement 返回应还/应收摘要", async () => {
+    const bob = createPerson({ name: "Bob" }).id;
+    const res = await postBill(
+      new Request("http://localhost/api/aa/bills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "聚餐",
+          date: "2026-08-25",
+          payerId: alice,
+          items: [
+            { description: "晚餐", amount: 4000, participants: [alice, bob] },
+          ],
+        }),
+      }),
+    );
+    const { id } = (await res.json()) as { id: string };
+
+    const sRes = await getSettlement(
+      new Request(`http://localhost/api/aa/bills/${id}/settlement`),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(sRes.status).toBe(200);
+    const s = await sRes.json();
+    expect(s.total).toBe(4000);
+    expect(s.receivable).toBe(2000);
+  });
+
+  it("GET settlement 不存在的账单返回 404", async () => {
+    const res = await getSettlement(
+      new Request("http://localhost/api/aa/bills/no-such/settlement"),
+      { params: Promise.resolve({ id: "no-such" }) },
+    );
+    expect(res.status).toBe(404);
   });
 });

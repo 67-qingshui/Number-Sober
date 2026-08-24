@@ -6,7 +6,9 @@ import {
   splitEqual,
   splitByRatio,
   validateAmountShares,
+  computeSettlement,
   type SplitMode,
+  type SettlementSummary,
 } from "@/lib/aa";
 
 export interface BillItemShare {
@@ -201,6 +203,13 @@ export function getBill(id: string, dbPath?: string): Bill {
   } finally {
     db.close();
   }
+}
+
+export function getSettlement(
+  billId: string,
+  dbPath?: string,
+): SettlementSummary {
+  return computeSettlement(getBill(billId, dbPath));
 }
 
 export function updateBillItems(

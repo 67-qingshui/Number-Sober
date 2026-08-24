@@ -33,6 +33,13 @@ interface BillDetail extends Bill {
   items: BillItem[];
 }
 
+interface SettlementSummary {
+  payerId: string;
+  total: number;
+  receivable: number;
+  obligations: { personId: string; owed: number; net: number }[];
+}
+
 interface BillItemInput {
   description: string;
   amount: string;
@@ -75,6 +82,9 @@ export function BillManager() {
   const [persons, setPersons] = useState<Person[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
   const [details, setDetails] = useState<Record<string, BillDetail>>({});
+  const [settlements, setSettlements] = useState<
+    Record<string, SettlementSummary>
+  >({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -211,10 +221,17 @@ export function BillManager() {
     }
     setExpandedId(bill.id);
     if (!details[bill.id]) {
-      const res = await fetch(`/api/aa/bills/${bill.id}`);
-      if (res.ok) {
-        const d = (await res.json()) as BillDetail;
+      const [dRes, sRes] = await Promise.all([
+        fetch(`/api/aa/bills/${bill.id}`),
+        fetch(`/api/aa/bills/${bill.id}/settlement`),
+      ]);
+      if (dRes.ok) {
+        const d = (await dRes.json()) as BillDetail;
         setDetails((prev) => ({ ...prev, [bill.id]: d }));
+      }
+      if (sRes.ok) {
+        const s = (await sRes.json()) as SettlementSummary;
+        setSettlements((prev) => ({ ...prev, [bill.id]: s }));
       }
     }
   }
@@ -361,6 +378,26 @@ export function BillManager() {
                     </li>
                   ))}
                 </ul>
+              )}
+              {expandedId === b.id && settlements[b.id] && (
+                <div>
+                  <p>
+                    垫付人{personName(settlements[b.id].payerId)}应收合计:¥
+                    {formatYen(settlements[b.id].receivable)}
+                  </p>
+                  <ul>
+                    {settlements[b.id].obligations.map((o) => (
+                      <li key={o.personId}>
+                        {personName(o.personId)}:
+                        {o.net > 0
+                          ? `应还 ¥${formatYen(o.net)}`
+                          : o.net < 0
+                            ? `应收 ¥${formatYen(-o.net)}`
+                            : "已平"}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </li>
           ))}

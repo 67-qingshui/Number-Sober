@@ -52,3 +52,60 @@ export function splitByRatio(amount: number, weights: number[]): number[] {
   }
   return floors;
 }
+
+export interface Obligation {
+  personId: string;
+  owed: number; // 应付合计
+  net: number; // 净额:正 = 应还(欠垫付人);负 = 应收(垫付人)
+}
+
+export interface SettlementSummary {
+  payerId: string;
+  total: number;
+  obligations: Obligation[];
+  receivable: number; // 垫付人应收合计(恒 ≥ 0)
+}
+
+/**
+ * 结算:垫付人已支付整单总额,按每人应付份额计算应还/应收。
+ * 非垫付人净额 = 应付(应还);垫付人净额 = 应付 − 总额(应收)。
+ * 所有净额之和恒为 0。
+ */
+export function computeSettlement(bill: {
+  payerId: string;
+  items: { participants: { personId: string; share: number }[] }[];
+}): SettlementSummary {
+  const owed = new Map<string, number>();
+  let total = 0;
+  for (const item of bill.items) {
+    for (const p of item.participants) {
+      owed.set(p.personId, (owed.get(p.personId) ?? 0) + p.share);
+      total += p.share;
+    }
+  }
+
+  const obligations: Obligation[] = [...owed.entries()].map(
+    ([personId, o]) => ({
+      personId,
+      owed: o,
+      net: personId === bill.payerId ? o - total : o,
+    }),
+  );
+
+  // 垫付人必须出现在结算清单中(即使未参与任何条目)
+  if (!owed.has(bill.payerId)) {
+    obligations.push({
+      personId: bill.payerId,
+      owed: 0,
+      net: -total,
+    });
+  }
+
+  const payer = obligations.find((o) => o.personId === bill.payerId);
+  return {
+    payerId: bill.payerId,
+    total,
+    obligations,
+    receivable: payer ? Math.abs(payer.net) : 0,
+  };
+}

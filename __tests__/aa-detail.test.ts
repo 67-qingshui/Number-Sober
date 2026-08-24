@@ -6,6 +6,7 @@ import { createPerson } from "@/server/persons";
 import {
   createBill,
   getBill,
+  getSettlement,
   updateBillItems,
   listBills,
 } from "@/server/aa";
@@ -89,5 +90,27 @@ describe("AA 账单详情与条目管理", () => {
     expect(list[0].items).toEqual([]);
     expect(list[0].total).toBe(100);
     expect(getBill(created.id, dbFile).items).toHaveLength(1);
+  });
+
+  it("getSettlement 计算应还/应收", () => {
+    const created = createBill(
+      {
+        title: "聚餐",
+        date: "2026-08-25",
+        payerId: alice,
+        items: [
+          { description: "晚餐", amount: 4000, participants: [alice, bob] },
+        ],
+      },
+      dbFile,
+    );
+    const s = getSettlement(created.id, dbFile);
+    expect(s.total).toBe(4000);
+    expect(s.receivable).toBe(2000);
+    const b = s.obligations.find((o) => o.personId === bob)!;
+    expect(b.owed).toBe(2000);
+    expect(b.net).toBe(2000); // 应还
+    const a = s.obligations.find((o) => o.personId === alice)!;
+    expect(a.net).toBe(-2000); // 应收
   });
 });

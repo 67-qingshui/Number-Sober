@@ -161,6 +161,19 @@ describe("AA 账单组件", () => {
           };
         if (url === "/api/aa/bills/b1")
           return { ok: true, json: async () => detail };
+        if (url === "/api/aa/bills/b1/settlement")
+          return {
+            ok: true,
+            json: async () => ({
+              payerId: "p1",
+              total: 4000,
+              receivable: 2000,
+              obligations: [
+                { personId: "p1", owed: 2000, net: -2000 },
+                { personId: "p2", owed: 2000, net: 2000 },
+              ],
+            }),
+          };
         return { ok: false, json: async () => ({}) };
       }),
     );
@@ -170,6 +183,65 @@ describe("AA 账单组件", () => {
     await user.click(screen.getByRole("button", { name: /展开/ }));
     expect(await screen.findByText(/晚餐/)).toBeInTheDocument();
     expect(screen.getAllByText(/2,000/).length).toBeGreaterThan(0);
+  });
+
+  it("展开账单显示应还/应收结算信息", async () => {
+    const detail = {
+      id: "b1",
+      title: "聚餐",
+      date: "2026-08-25",
+      payerId: "p1",
+      status: "open",
+      total: 4000,
+      items: [
+        {
+          id: "i1",
+          billId: "b1",
+          description: "晚餐",
+          amount: 4000,
+          splitMode: "equal",
+          participants: [
+            { personId: "p1", share: 2000 },
+            { personId: "p2", share: 2000 },
+          ],
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/persons")
+          return { ok: true, json: async () => PERSONS };
+        if (url === "/api/aa/bills")
+          return {
+            ok: true,
+            json: async () => [{ id: "b1", title: "聚餐", date: "2026-08-25", payerId: "p1", status: "open", total: 4000 }],
+          };
+        if (url === "/api/aa/bills/b1")
+          return { ok: true, json: async () => detail };
+        if (url === "/api/aa/bills/b1/settlement")
+          return {
+            ok: true,
+            json: async () => ({
+              payerId: "p1",
+              total: 4000,
+              receivable: 2000,
+              obligations: [
+                { personId: "p1", owed: 2000, net: -2000 },
+                { personId: "p2", owed: 2000, net: 2000 },
+              ],
+            }),
+          };
+        return { ok: false, json: async () => ({}) };
+      }),
+    );
+    render(<BillManager />);
+    const user = userEvent.setup();
+    await screen.findByText(/聚餐/);
+    await user.click(screen.getByRole("button", { name: /展开/ }));
+    expect(await screen.findByText(/应收合计/)).toBeInTheDocument();
+    expect(screen.getByText(/Alice.*应收 ¥2,000/)).toBeInTheDocument();
+    expect(screen.getByText(/Bob.*应还 ¥2,000/)).toBeInTheDocument();
   });
 
   it("编辑账单条目并保存(PUT)", async () => {
