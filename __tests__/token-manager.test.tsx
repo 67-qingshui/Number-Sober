@@ -11,21 +11,34 @@ describe("Token 管理组件", () => {
   it("渲染录入列表(含各类 token 与成本)", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => [
-          {
-            id: "1",
-            date: "2026-08-25",
-            provider: "deepseek",
-            model: "deepseek-chat",
-            inputTokens: 1000,
-            cacheHitTokens: 200,
-            outputTokens: 500,
-            cost: 0.15,
-            createdAt: "",
-          },
-        ],
+      vi.fn(async (url: string) => {
+        if (url === "/api/token-entries")
+          return {
+            ok: true,
+            json: async () => [
+              {
+                id: "1",
+                date: "2026-08-25",
+                provider: "deepseek",
+                model: "deepseek-chat",
+                inputTokens: 1000,
+                cacheHitTokens: 200,
+                outputTokens: 500,
+                cost: 0.15,
+                createdAt: "",
+              },
+            ],
+          };
+        if (url === "/api/token-entries/stats")
+          return {
+            ok: true,
+            json: async () => ({
+              totals: { inputTokens: 0, cacheHitTokens: 0, outputTokens: 0, cost: 0 },
+              byDay: [],
+              byModel: [],
+            }),
+          };
+        return { ok: false, json: async () => ({}) };
       }),
     );
     render(<TokenManager />);
@@ -37,6 +50,15 @@ describe("Token 管理组件", () => {
     const fetchMock = vi.fn(async (url: string, opts?: RequestInit) => {
       if (url === "/api/token-entries" && (!opts || opts.method === "GET"))
         return { ok: true, json: async () => [] };
+      if (url === "/api/token-entries/stats")
+        return {
+          ok: true,
+          json: async () => ({
+            totals: { inputTokens: 0, cacheHitTokens: 0, outputTokens: 0, cost: 0 },
+            byDay: [],
+            byModel: [],
+          }),
+        };
       if (url === "/api/token-entries" && opts?.method === "POST")
         return { ok: true, json: async () => ({ id: "n1" }) };
       return { ok: false, json: async () => ({ error: "未知" }) };
@@ -63,5 +85,49 @@ describe("Token 管理组件", () => {
       expect(body.inputTokens).toBe(1000);
       expect(body.cost).toBe(0.15);
     });
+  });
+
+  it("渲染统计总计与按天/按模型聚合", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/token-entries")
+          return {
+            ok: true,
+            json: async () => [
+              {
+                id: "1",
+                date: "2026-08-25",
+                provider: "deepseek",
+                model: "deepseek-chat",
+                inputTokens: 1000,
+                cacheHitTokens: 200,
+                outputTokens: 500,
+                cost: 0.15,
+                createdAt: "",
+              },
+            ],
+          };
+        if (url === "/api/token-entries/stats")
+          return {
+            ok: true,
+            json: async () => ({
+              totals: { inputTokens: 1000, cacheHitTokens: 200, outputTokens: 500, cost: 0.15 },
+              byDay: [
+                { key: "2026-08-25", inputTokens: 1000, cacheHitTokens: 200, outputTokens: 500, cost: 0.15 },
+              ],
+              byModel: [
+                { key: "deepseek-chat", inputTokens: 1000, cacheHitTokens: 200, outputTokens: 500, cost: 0.15 },
+              ],
+            }),
+          };
+        return { ok: false, json: async () => ({}) };
+      }),
+    );
+    render(<TokenManager />);
+    expect(await screen.findByText(/总计/)).toBeInTheDocument();
+    expect(screen.getAllByText(/输入 1,000/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/按天统计/)).toBeInTheDocument();
+    expect(screen.getByText(/按模型统计/)).toBeInTheDocument();
   });
 });

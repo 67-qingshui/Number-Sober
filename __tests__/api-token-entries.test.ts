@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { setupAdmin } from "@/server/admin";
 import { createSession } from "@/server/session";
 import { GET, POST } from "@/app/api/token-entries/route";
+import { GET as getStats } from "@/app/api/token-entries/stats/route";
 
 let mockToken = "";
 vi.mock("next/headers", () => ({
@@ -79,5 +80,28 @@ describe("Token 录入 API", () => {
   it("未登录返回 401", async () => {
     mockToken = "";
     expect((await GET()).status).toBe(401);
+  });
+
+  it("GET stats 返回总计与聚合", async () => {
+    await POST(
+      new Request("http://localhost/api/token-entries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: "2026-08-25",
+          provider: "deepseek",
+          model: "deepseek-chat",
+          inputTokens: 1000,
+          outputTokens: 500,
+          cost: 0.15,
+        }),
+      }),
+    );
+    const res = await getStats();
+    expect(res.status).toBe(200);
+    const stats = await res.json();
+    expect(stats.totals.inputTokens).toBe(1000);
+    expect(stats.byModel).toHaveLength(1);
+    expect(stats.byDay).toHaveLength(1);
   });
 });

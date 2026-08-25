@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { openDb } from "./db";
 import { runMigrations } from "./migrate";
+import {
+  aggregateByDay,
+  aggregateByModel,
+  totalStats,
+} from "@/lib/token-stats";
 
 export interface TokenEntry {
   id: string;
@@ -92,4 +97,36 @@ export function listTokenEntries(dbPath?: string): TokenEntry[] {
   } finally {
     db.close();
   }
+}
+
+export interface TokenStats {
+  totals: {
+    inputTokens: number;
+    cacheHitTokens: number;
+    outputTokens: number;
+    cost: number;
+  };
+  byDay: {
+    key: string;
+    inputTokens: number;
+    cacheHitTokens: number;
+    outputTokens: number;
+    cost: number;
+  }[];
+  byModel: {
+    key: string;
+    inputTokens: number;
+    cacheHitTokens: number;
+    outputTokens: number;
+    cost: number;
+  }[];
+}
+
+export function getTokenStats(dbPath?: string): TokenStats {
+  const entries = listTokenEntries(dbPath);
+  return {
+    totals: totalStats(entries),
+    byDay: aggregateByDay(entries),
+    byModel: aggregateByModel(entries),
+  };
 }

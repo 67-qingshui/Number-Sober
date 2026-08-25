@@ -14,8 +14,28 @@ interface TokenEntry {
   createdAt: string;
 }
 
+interface TokenStats {
+  totals: {
+    inputTokens: number;
+    cacheHitTokens: number;
+    outputTokens: number;
+    cost: number;
+  };
+  byDay: TokenAgg[];
+  byModel: TokenAgg[];
+}
+
+interface TokenAgg {
+  key: string;
+  inputTokens: number;
+  cacheHitTokens: number;
+  outputTokens: number;
+  cost: number;
+}
+
 export function TokenManager() {
   const [entries, setEntries] = useState<TokenEntry[]>([]);
+  const [stats, setStats] = useState<TokenStats | null>(null);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [provider, setProvider] = useState("");
   const [model, setModel] = useState("");
@@ -27,8 +47,12 @@ export function TokenManager() {
   const [loading, setLoading] = useState(true);
 
   async function load() {
-    const res = await fetch("/api/token-entries");
-    if (res.ok) setEntries(await res.json());
+    const [eRes, sRes] = await Promise.all([
+      fetch("/api/token-entries"),
+      fetch("/api/token-entries/stats"),
+    ]);
+    if (eRes.ok) setEntries(await eRes.json());
+    if (sRes.ok) setStats(await sRes.json());
     setLoading(false);
   }
 
@@ -125,6 +149,30 @@ export function TokenManager() {
         <button type="submit">录入</button>
       </form>
       {error && <p role="alert">{error}</p>}
+      {stats && (
+        <div>
+          <h2>总计</h2>
+          <p>
+            {`输入 ${stats.totals.inputTokens.toLocaleString()} · 缓存 ${stats.totals.cacheHitTokens.toLocaleString()} · 输出 ${stats.totals.outputTokens.toLocaleString()} · 成本 $${stats.totals.cost.toFixed(4)}`}
+          </p>
+          <h3>按天统计</h3>
+          <ul>
+            {stats.byDay.map((d) => (
+              <li key={d.key}>
+                {`${d.key} — 输入 ${d.inputTokens.toLocaleString()} · 缓存 ${d.cacheHitTokens.toLocaleString()} · 输出 ${d.outputTokens.toLocaleString()} · $${d.cost.toFixed(4)}`}
+              </li>
+            ))}
+          </ul>
+          <h3>按模型统计</h3>
+          <ul>
+            {stats.byModel.map((m) => (
+              <li key={m.key}>
+                {`${m.key} — 输入 ${m.inputTokens.toLocaleString()} · 缓存 ${m.cacheHitTokens.toLocaleString()} · 输出 ${m.outputTokens.toLocaleString()} · $${m.cost.toFixed(4)}`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {loading ? (
         <p>加载中…</p>
       ) : (

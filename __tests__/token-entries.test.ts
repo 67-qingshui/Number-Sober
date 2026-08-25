@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   createTokenEntry,
   listTokenEntries,
+  getTokenStats,
 } from "@/server/token-entries";
 
 describe("Token 录入服务", () => {
@@ -79,5 +80,25 @@ describe("Token 录入服务", () => {
     );
     const list = listTokenEntries(dbFile);
     expect(list[0].date).toBe("2026-08-25");
+  });
+
+  it("统计汇总正确(总计/按天/按模型)", () => {
+    createTokenEntry(
+      { date: "2026-08-01", provider: "deepseek", model: "deepseek-chat", inputTokens: 1000, cacheHitTokens: 200, outputTokens: 500, cost: 0.15 },
+      dbFile,
+    );
+    createTokenEntry(
+      { date: "2026-08-01", provider: "deepseek", model: "deepseek-chat", inputTokens: 2000, outputTokens: 1000, cost: 0.3 },
+      dbFile,
+    );
+    createTokenEntry(
+      { date: "2026-08-02", provider: "openai", model: "gpt-4o", inputTokens: 500, cacheHitTokens: 100, outputTokens: 300, cost: 0.08 },
+      dbFile,
+    );
+    const stats = getTokenStats(dbFile);
+    expect(stats.totals.inputTokens).toBe(3500);
+    expect(stats.totals.cost).toBeCloseTo(0.53);
+    expect(stats.byDay).toHaveLength(2);
+    expect(stats.byModel).toHaveLength(2);
   });
 });
