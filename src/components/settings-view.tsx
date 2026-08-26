@@ -8,12 +8,20 @@ export function SettingsView() {
   const [newPassword, setNewPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [backups, setBackups] = useState<{ name: string; size: number }[]>([]);
 
   async function load() {
-    const res = await fetch("/api/config");
-    if (res.ok) {
-      const d = await res.json();
+    const [cRes, bRes] = await Promise.all([
+      fetch("/api/config"),
+      fetch("/api/backup"),
+    ]);
+    if (cRes.ok) {
+      const d = await cRes.json();
       setRate(String(d.pointYenRate));
+    }
+    if (bRes.ok) {
+      const d = await bRes.json();
+      setBackups(d.backups ?? []);
     }
     setLoading(false);
   }
@@ -51,6 +59,18 @@ export function SettingsView() {
       setOldPassword("");
       setNewPassword("");
     }
+  }
+
+  async function handleBackupNow() {
+    setMessage("");
+    const res = await fetch("/api/backup", { method: "POST" });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setMessage(d.error ?? "备份失败");
+      return;
+    }
+    setMessage("备份完成");
+    await load();
   }
 
   return (
@@ -95,6 +115,21 @@ export function SettingsView() {
             <button type="button" onClick={handleChangePassword}>
               修改密码
             </button>
+          </div>
+          <div>
+            <h2>备份与还原</h2>
+            <button type="button" onClick={handleBackupNow}>
+              立即备份
+            </button>
+            {backups.length > 0 && (
+              <ul>
+                {backups.map((b) => (
+                  <li key={b.name}>
+                    {`${b.name}(${(b.size / 1024).toFixed(0)} KB)`}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           {message && <p role="status">{message}</p>}
         </>

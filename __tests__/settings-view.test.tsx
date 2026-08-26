@@ -78,4 +78,30 @@ describe("系统设置组件", () => {
     });
     expect(await screen.findByText(/密码已修改/)).toBeInTheDocument();
   });
+
+  it("导出备份并显示备份清单", async () => {
+    const fetchMock = vi.fn(async (url: string, opts?: RequestInit) => {
+      if (url === "/api/config" && (!opts || opts.method === "GET"))
+        return { ok: true, json: async () => ({ pointYenRate: 1 }) };
+      if (url === "/api/backup" && (!opts || opts.method === "GET"))
+        return {
+          ok: true,
+          json: async () => ({
+            backups: [{ name: "number-sober-2026.db", size: 40960 }],
+          }),
+        };
+      if (url === "/api/backup" && opts?.method === "POST")
+        return {
+          ok: true,
+          json: async () => ({ path: "/x/b.db", size: 40960, createdAt: "" }),
+        };
+      return { ok: false, json: async () => ({ error: "未知" }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SettingsView />);
+    const user = userEvent.setup();
+    expect(await screen.findByText(/number-sober-2026\.db/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "立即备份" }));
+    expect(await screen.findByText((c) => c.includes("备份完成"))).toBeInTheDocument();
+  });
 });
