@@ -130,4 +130,42 @@ describe("Token 管理组件", () => {
     expect(screen.getByText(/按天统计/)).toBeInTheDocument();
     expect(screen.getByText(/按模型统计/)).toBeInTheDocument();
   });
+
+  it("粘贴 CSV 导入并显示结果", async () => {
+    const fetchMock = vi.fn(async (url: string, opts?: RequestInit) => {
+      if (url === "/api/token-entries" && (!opts || opts.method === "GET"))
+        return { ok: true, json: async () => [] };
+      if (url === "/api/token-entries/stats")
+        return {
+          ok: true,
+          json: async () => ({
+            totals: { inputTokens: 0, cacheHitTokens: 0, outputTokens: 0, cost: 0 },
+            byDay: [],
+            byModel: [],
+          }),
+        };
+      if (url === "/api/token-entries/import" && opts?.method === "POST")
+        return {
+          ok: true,
+          json: async () => ({ imported: 2, failedRows: 0, firstError: null }),
+        };
+      return { ok: false, json: async () => ({ error: "未知" }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<TokenManager />);
+    const user = userEvent.setup();
+    await screen.findByLabelText("CSV 内容");
+    await user.type(
+      screen.getByLabelText("CSV 内容"),
+      "date,provider,model,input_tokens,output_tokens\n2026-08-01,x,m,100,50",
+    );
+    await user.click(screen.getByRole("button", { name: "导入 CSV" }));
+    expect(await screen.findByText(/成功导入 2 条/)).toBeInTheDocument();
+    const calls = fetchMock.mock.calls.filter(
+      (c) =>
+        c[0] === "/api/token-entries/import" &&
+        (c[1] as RequestInit)?.method === "POST",
+    );
+    expect(calls.length).toBe(1);
+  });
 });

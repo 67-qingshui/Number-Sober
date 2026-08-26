@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { openDb } from "./db";
 import { runMigrations } from "./migrate";
+import { parseTokenCsv, type ParsedTokenRow } from "@/lib/token-csv";
 import {
   aggregateByDay,
   aggregateByModel,
@@ -129,4 +130,43 @@ export function getTokenStats(dbPath?: string): TokenStats {
     byDay: aggregateByDay(entries),
     byModel: aggregateByModel(entries),
   };
+}
+
+export interface ImportResult {
+  imported: number;
+  failedRows: number;
+  firstError: string | null;
+}
+
+/** 批量导入 CSV。逐行独立校验,失败行跳过并计数(事务保证部分成功)。 */
+export function importTokenCsv(csv: string, dbPath?: string): ImportResult {
+  const rows = parseTokenCsv(csv);
+  if (rows.length === 0) return { imported: 0, failedRows: 0, firstError: null };
+
+  let imported = 0;
+  let failedRows = 0;
+  let firstError: string | null = null;
+
+  for (const row of rows) {
+    try {
+      createTokenEntry(
+        {
+          date: row.date,
+          provider: row.provider,
+          model: row.model,
+          inputTokens: row.inputTokens,
+          cacheHitTokens: row.cacheHitTokens,
+          outputTokens: row.outputTokens,
+          cost: row.cost,
+        },
+        dbPath,
+      );
+      imported++;
+    } catch (err) {
+      failedRows++;
+      if (!firstError)
+        firstError = err instanceof Error ? err.message : "未知错误";
+    }
+  }
+  return { imported, failedRows, firstError };
 }

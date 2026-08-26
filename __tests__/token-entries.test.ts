@@ -6,6 +6,7 @@ import {
   createTokenEntry,
   listTokenEntries,
   getTokenStats,
+  importTokenCsv,
 } from "@/server/token-entries";
 
 describe("Token 录入服务", () => {
@@ -100,5 +101,30 @@ describe("Token 录入服务", () => {
     expect(stats.totals.cost).toBeCloseTo(0.53);
     expect(stats.byDay).toHaveLength(2);
     expect(stats.byModel).toHaveLength(2);
+  });
+
+  it("CSV 批量导入成功", () => {
+    const csv = [
+      "date,provider,model,input_tokens,cache_hit_tokens,output_tokens,cost",
+      "2026-08-01,deepseek,deepseek-chat,1000,200,500,0.15",
+      "2026-08-02,x,m,100,,50,",
+    ].join("\n");
+    const result = importTokenCsv(csv, dbFile);
+    expect(result.imported).toBe(2);
+    expect(result.failedRows).toBe(0);
+    expect(listTokenEntries(dbFile)).toHaveLength(2);
+  });
+
+  it("CSV 含非法行时跳过并计数", () => {
+    const csv = [
+      "date,provider,model,input_tokens,output_tokens",
+      "2026-08-01,x,m,100,50",
+      "2026-08-01,x,m,-5,50",
+    ].join("\n");
+    const result = importTokenCsv(csv, dbFile);
+    expect(result.imported).toBe(1);
+    expect(result.failedRows).toBe(1);
+    expect(result.firstError).toContain("非负");
+    expect(listTokenEntries(dbFile)).toHaveLength(1);
   });
 });

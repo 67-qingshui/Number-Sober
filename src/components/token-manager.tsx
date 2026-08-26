@@ -45,6 +45,8 @@ export function TokenManager() {
   const [cost, setCost] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [csvText, setCsvText] = useState("");
+  const [importResult, setImportResult] = useState<string | null>(null);
 
   async function load() {
     const [eRes, sRes] = await Promise.all([
@@ -88,6 +90,32 @@ export function TokenManager() {
     setCacheHitTokens("");
     setOutputTokens("");
     setCost("");
+    await load();
+  }
+
+  async function handleImport() {
+    setError("");
+    setImportResult(null);
+    const res = await fetch("/api/token-entries/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csv: csvText }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error ?? "导入失败");
+      return;
+    }
+    const r = (await res.json()) as {
+      imported: number;
+      failedRows: number;
+      firstError: string | null;
+    };
+    setImportResult(
+      `成功导入 ${r.imported} 条` +
+        (r.failedRows > 0 ? `,失败 ${r.failedRows} 行:${r.firstError ?? ""}` : ""),
+    );
+    setCsvText("");
     await load();
   }
 
@@ -148,6 +176,20 @@ export function TokenManager() {
         />
         <button type="submit">录入</button>
       </form>
+      <div>
+        <h2>CSV 批量导入</h2>
+        <textarea
+          value={csvText}
+          onChange={(e) => setCsvText(e.target.value)}
+          placeholder={"date,provider,model,input_tokens,output_tokens\n2026-08-01,x,m,100,50"}
+          aria-label="CSV 内容"
+          rows={4}
+        />
+        <button type="button" onClick={handleImport}>
+          导入 CSV
+        </button>
+        {importResult && <p>{importResult}</p>}
+      </div>
       {error && <p role="alert">{error}</p>}
       {stats && (
         <div>
