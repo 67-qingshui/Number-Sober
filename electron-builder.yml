@@ -11,6 +11,9 @@ files:
   - public/**
 asarUnpack:
   - node_modules/better-sqlite3/**
+  # next CLI 必须在真实文件系统上(asar 内无法 spawn)
+  - node_modules/next/dist/bin/**
+  - node_modules/next/dist/bin/next
 npmRebuild: false
 mac:
   target:

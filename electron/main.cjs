@@ -2,10 +2,17 @@ const { app, BrowserWindow } = require("electron");
 const { spawn } = require("node:child_process");
 const net = require("node:net");
 const path = require("node:path");
+const fs = require("node:fs");
 
 const DEV = !app.isPackaged;
 const HOST = "127.0.0.1";
 const PORT = 3100;
+
+// asar 包内的路径无法被 spawn 执行,打包后必须用 asar.unpacked 的真实文件
+function unpackedPath(...segments) {
+  const resources = process.resourcesPath || path.join(process.cwd(), "Resources");
+  return path.join(resources, "app.asar.unpacked", ...segments);
+}
 
 let serverProc = null;
 
@@ -31,20 +38,34 @@ async function waitForServer(port, timeoutMs = 60000) {
 }
 
 function startNextServer() {
-  const nextBin = path.join(
-    app.getAppPath(),
-    "node_modules",
-    "next",
-    "dist",
-    "bin",
-    "next",
-  );
-  const base = [nextBin, DEV ? "dev" : "start", "-p", String(PORT), "-H", HOST];
+  // next CLI 在 asar 内也能被 ELECTRON_RUN_AS_NODE 模式执行(Electron 的 fs 补丁
+  // 对自身进程生效)。优先用 asar 内完整版,避免 unpacked 残缺副本。
+  const appPath = app.getAppPath();
+  const nextBin = path.join(appPath, "node_modules", "next", "dist", "bin", "next");
+
+  const base = [
+    nextBin,
+    DEV ? "dev" : "start",
+    "-p", String(PORT),
+    "-H", HOST,
+    // 生产模式显式指定应用目录(asar 内),Electron fs 补丁可读
+    ...(DEV ? [] : [appPath]),
+  ];
   // dev:系统 node(开发环境必有);prod:Electron 内嵌 node,用户机器无需装 node
   const exec = DEV ? "node" : process.execPath;
   const env = DEV ? process.env : { ...process.env, ELECTRON_RUN_AS_NODE: "1" };
-  const child = spawn(exec, base, { env, cwd: app.getAppPath(), stdio: "inherit" });
+  // 关键:cwd 不能在 asar 内(spawn 的 chdir 系统调用无法进入虚拟路径),
+  // 打包时用真实文件目录;数据目录也在真实磁盘上
+  const realCwd = DEV
+    ? appPath
+    : path.join(
+        process.resourcesPath || path.dirname(appPath),
+        "app.asar.unpacked",
+      );
+  fs.mkdirSync(realCwd, { recursive: true });
+  const child = spawn(exec, base, { env, cwd: realCwd, stdio: "inherit" });
   child.on("exit", (code) => console.log("[next] exited with", code));
+  child.on("error", (err) => console.error("[next] spawn error:", err.message));
   return child;
 }
 
