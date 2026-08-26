@@ -31,7 +31,8 @@ export interface Balance {
 function balanceInner(db: Database.Database): Balance {
   const avail = db
     .prepare(
-      "SELECT COALESCE(SUM(amount), 0) AS t FROM point_entries WHERE amount > 0 AND available_at IS NULL",
+      // 已可用 = 所有 available_at 为空的条目之和(含抵扣的负数)
+      "SELECT COALESCE(SUM(amount), 0) AS t FROM point_entries WHERE available_at IS NULL",
     )
     .get() as { t: number };
   const pending = db
@@ -39,7 +40,7 @@ function balanceInner(db: Database.Database): Balance {
       "SELECT COALESCE(SUM(amount), 0) AS t FROM point_entries WHERE amount > 0 AND available_at IS NOT NULL",
     )
     .get() as { t: number };
-  return { available: avail.t, pending: pending.t };
+  return { available: Math.max(0, avail.t), pending: pending.t };
 }
 
 export function getBalance(dbPath?: string): Balance {

@@ -30,6 +30,8 @@ export function PointsManager() {
   const [error, setError] = useState("");
   const [lastEarnback, setLastEarnback] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [redeemDesc, setRedeemDesc] = useState("");
+  const [redeemAmount, setRedeemAmount] = useState("");
 
   async function load() {
     const [eRes, bRes] = await Promise.all([
@@ -87,6 +89,27 @@ export function PointsManager() {
     }
     const d = await res.json();
     if (d.settled > 0) setLastEarnback(`已到账 ${d.settled} 积分`);
+    await load();
+  }
+
+  async function handleRedeem() {
+    setError("");
+    const res = await fetch("/api/points/redeem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: new Date().toISOString().slice(0, 10),
+        description: redeemDesc,
+        amount: Number(redeemAmount),
+      }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error ?? "抵扣失败");
+      return;
+    }
+    setRedeemDesc("");
+    setRedeemAmount("");
     await load();
   }
 
@@ -151,6 +174,25 @@ export function PointsManager() {
               结算到期积分
             </button>
           </p>
+          <div>
+            <input
+              value={redeemDesc}
+              onChange={(e) => setRedeemDesc(e.target.value)}
+              placeholder="抵扣描述"
+              aria-label="抵扣描述"
+            />
+            <input
+              type="number"
+              min={1}
+              value={redeemAmount}
+              onChange={(e) => setRedeemAmount(e.target.value)}
+              placeholder="抵扣积分"
+              aria-label="抵扣积分"
+            />
+            <button type="button" onClick={handleRedeem}>
+              确认抵扣
+            </button>
+          </div>
         </div>
       )}
       {entries.length > 0 && (

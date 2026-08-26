@@ -75,6 +75,46 @@ describe("积分管理组件", () => {
     expect(screen.getByText((c) => c.includes("400 积分"))).toBeInTheDocument();
   });
 
+  it("抵扣消费:提交后余额刷新", async () => {
+    const fetchMock = vi.fn(async (url: string, opts?: RequestInit) => {
+      if (url === "/api/points" && (!opts || opts.method === "GET"))
+        return { ok: true, json: async () => ENTRIES };
+      if (url === "/api/points/balance" && (!opts || opts.method === "GET"))
+        return {
+          ok: true,
+          json: async () => ({ available: 50, pending: 400 }),
+        };
+      if (url === "/api/points/redeem" && opts?.method === "POST")
+        return {
+          ok: true,
+          json: async () => ({
+            balance: { available: 50, pending: 400 },
+          }),
+        };
+      return { ok: false, json: async () => ({ error: "未知" }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PointsManager />);
+    const user = userEvent.setup();
+    await screen.findByLabelText("抵扣描述");
+    await user.type(screen.getByLabelText("抵扣描述"), "抵咖啡");
+    await user.type(screen.getByLabelText("抵扣积分"), "50");
+    await user.click(screen.getByRole("button", { name: "确认抵扣" }));
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls.filter(
+        (c) =>
+          c[0] === "/api/points/redeem" &&
+          (c[1] as RequestInit)?.method === "POST",
+      );
+      expect(calls.length).toBe(1);
+      const body = JSON.parse((calls[0][1] as RequestInit).body as string);
+      expect(body.amount).toBe(50);
+    });
+    expect(
+      await screen.findByText((c) => c.includes("可用 50")),
+    ).toBeInTheDocument();
+  });
+
   it("点击结算按钮调用结算 API 并刷新余额", async () => {
     const fetchMock = vi.fn(async (url: string, opts?: RequestInit) => {
       if (url === "/api/points" && (!opts || opts.method === "GET"))
