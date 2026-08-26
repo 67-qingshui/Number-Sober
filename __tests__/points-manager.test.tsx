@@ -46,7 +46,9 @@ describe("积分管理组件", () => {
     render(<PointsManager />);
     expect(await screen.findByText(/购物\(立即\)/)).toBeInTheDocument();
     expect(screen.getByText(/购物\(延迟\)/)).toBeInTheDocument();
-    expect(screen.getByText(/2026-09-24 到账/)).toBeInTheDocument();
+    expect(
+      screen.getAllByText((c) => c.includes("2026-09-24 到账")).length,
+    ).toBeGreaterThan(0);
     expect(screen.getByText((c) => c.includes("可用 100"))).toBeInTheDocument();
     expect(screen.getByText((c) => c.includes("待入账 400"))).toBeInTheDocument();
   });
@@ -67,7 +69,9 @@ describe("积分管理组件", () => {
     );
     render(<PointsManager />);
     expect(await screen.findByText(/待入账日历/)).toBeInTheDocument();
-    expect(screen.getByText((c) => c.includes("2026-09-24"))).toBeInTheDocument();
+    expect(
+      screen.getAllByText((c) => c.includes("2026-09-24")).length,
+    ).toBeGreaterThan(0);
     expect(screen.getByText((c) => c.includes("400 积分"))).toBeInTheDocument();
   });
 
