@@ -34,6 +34,29 @@ export function setupAdmin(password: string, dbPath?: string): void {
   }
 }
 
+/** 验证旧密码后更新为新密码。 */
+export function changePassword(
+  oldPassword: string,
+  newPassword: string,
+  dbPath?: string,
+): void {
+  const pwd = newPassword.trim();
+  if (pwd.length < MIN_PASSWORD_LENGTH)
+    throw new Error(`密码至少 ${MIN_PASSWORD_LENGTH} 位`);
+  if (!verifyPassword(oldPassword, dbPath))
+    throw new Error("旧密码不正确");
+
+  const db = openDb(dbPath);
+  try {
+    runMigrations(db);
+    const salt = randomBytes(16).toString("hex");
+    const hash = scryptSync(pwd, salt, 64).toString("hex");
+    db.prepare("UPDATE admin SET password_hash = ?").run(`${salt}:${hash}`);
+  } finally {
+    db.close();
+  }
+}
+
 export function verifyPassword(password: string, dbPath?: string): boolean {
   const db = openDb(dbPath);
   try {
