@@ -147,7 +147,8 @@ export function updateItem(
       );
     }
     if (input.stock !== undefined) {
-      if (input.stock < 0) throw new Error("库存不能为负");
+      if (input.stock !== null && input.stock < 0)
+        throw new Error("库存不能为负");
       db.prepare("UPDATE items SET stock = ? WHERE id = ?").run(
         input.stock,
         id,

@@ -142,7 +142,9 @@ function getBillInner(db: Database.Database, id: string): Bill {
     .prepare(
       "SELECT id, bill_id AS billId, description, amount, split_mode AS splitMode FROM aa_bill_items WHERE bill_id = ? ORDER BY position",
     )
-    .all(id) as Omit<BillItem, "participants">[];
+    .all(id) as (Omit<BillItem, "participants"> & {
+    participants?: { personId: string; share: number }[];
+  })[];
 
   const partsStmt = db.prepare(
     "SELECT person_id AS personId, share FROM aa_bill_item_participants WHERE item_id = ? ORDER BY rowid",
@@ -160,7 +162,7 @@ function getBillInner(db: Database.Database, id: string): Bill {
     total: items.reduce((s, i) => s + i.amount, 0),
     items: items as BillItem[],
   };
-  }
+}
 
 export function createBill(input: CreateBillInput, dbPath?: string): Bill {
   const title = input.title.trim();
@@ -192,6 +194,7 @@ export function createBill(input: CreateBillInput, dbPath?: string): Bill {
       date: input.date,
       payerId: input.payerId,
       status: "open",
+      settledAt: null,
       total: items.reduce((s, i) => s + i.amount, 0),
       items,
     };
@@ -279,15 +282,19 @@ export function listBills(dbPath?: string): Bill[] {
     runMigrations(db);
     const rows = db
       .prepare(
-        "SELECT id, title, bill_date AS date, payer_id AS payerId, status, created_at AS createdAt FROM aa_bills ORDER BY rowid DESC",
+        "SELECT id, title, bill_date AS date, payer_id AS payerId, status, settled_at AS settledAt FROM aa_bills ORDER BY rowid DESC",
       )
-      .all() as Pick<Bill, "id" | "title" | "date" | "payerId" | "status">[];
+      .all() as Pick<
+      Bill,
+      "id" | "title" | "date" | "payerId" | "status" | "settledAt"
+    >[];
 
     const totalStmt = db.prepare(
       "SELECT COALESCE(SUM(amount), 0) AS t FROM aa_bill_items WHERE bill_id = ?",
     );
     return rows.map((r) => ({
       ...r,
+      settledAt: r.settledAt ?? null,
       total: (totalStmt.get(r.id) as { t: number }).t,
       items: [],
     }));

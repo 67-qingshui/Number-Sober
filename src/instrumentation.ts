@@ -6,17 +6,15 @@ export async function register() {
   // 仅 Node 运行时执行(排除 edge)
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
-  const { autoBackup } = await import("@/server/auto-backup");
-  const { DEFAULT_DB_PATH } = await import("@/server/db");
-  const path = await import("node:path");
-  const fs = await import("node:fs");
+  // 动态 import 收敛在 nodejs 分支内
+  const [{ autoBackup }, { DEFAULT_DB_PATH }, path, fs] = await Promise.all([
+    import("@/server/auto-backup"),
+    import("@/server/db"),
+    import("node:path"),
+    import("node:fs"),
+  ]);
 
-  const backupDir = path.join(
-    path.dirname(DEFAULT_DB_PATH),
-    "backups",
-  );
-
-  const BACKUP_DIR = backupDir;
+  const BACKUP_DIR = path.join(path.dirname(DEFAULT_DB_PATH), "backups");
 
   const tick = () => {
     autoBackup({
