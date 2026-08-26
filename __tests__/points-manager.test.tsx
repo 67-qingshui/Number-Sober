@@ -47,8 +47,28 @@ describe("积分管理组件", () => {
     expect(await screen.findByText(/购物\(立即\)/)).toBeInTheDocument();
     expect(screen.getByText(/购物\(延迟\)/)).toBeInTheDocument();
     expect(screen.getByText(/2026-09-24 到账/)).toBeInTheDocument();
-    expect(screen.getByText(/可用 100/)).toBeInTheDocument();
-    expect(screen.getByText(/待入账 400/)).toBeInTheDocument();
+    expect(screen.getByText((c) => c.includes("可用 100"))).toBeInTheDocument();
+    expect(screen.getByText((c) => c.includes("待入账 400"))).toBeInTheDocument();
+  });
+
+  it("渲染延迟到账日历(同日合并,显示条数)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/points")
+          return { ok: true, json: async () => ENTRIES };
+        if (url === "/api/points/balance")
+          return {
+            ok: true,
+            json: async () => ({ available: 100, pending: 400 }),
+          };
+        return { ok: false, json: async () => ({}) };
+      }),
+    );
+    render(<PointsManager />);
+    expect(await screen.findByText(/待入账日历/)).toBeInTheDocument();
+    expect(screen.getByText((c) => c.includes("2026-09-24"))).toBeInTheDocument();
+    expect(screen.getByText((c) => c.includes("400 积分"))).toBeInTheDocument();
   });
 
   it("点击结算按钮调用结算 API 并刷新余额", async () => {

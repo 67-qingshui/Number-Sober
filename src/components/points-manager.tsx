@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { buildCalendar } from "@/lib/points-calendar";
 
 interface PointEntry {
   id: string;
@@ -150,6 +151,18 @@ export function PointsManager() {
               结算到期积分
             </button>
           </p>
+        </div>
+      )}
+      {entries.length > 0 && (
+        <div>
+          <h2>待入账日历</h2>
+          <ul>
+            {buildCalendar(entries).map((day) => (
+              <li key={day.date}>
+                {`${day.date} 到账 ${day.total.toLocaleString()} 积分`}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
       {loading ? (
