@@ -7,7 +7,10 @@ import path from "node:path";
 
 export const runtime = "nodejs";
 
-const BACKUP_DIR = path.join(path.dirname(DEFAULT_DB_PATH), "backups");
+const BACKUP_DIR =
+  process.env.NS_BACKUP_DIR && fs.existsSync(process.env.NS_BACKUP_DIR)
+    ? process.env.NS_BACKUP_DIR
+    : path.join(path.dirname(DEFAULT_DB_PATH), "backups");
 
 export async function POST() {
   if (!(await requireAuth()))

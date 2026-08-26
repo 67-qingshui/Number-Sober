@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { hasAdmin } from "@/server/admin";
 import { validateSession } from "@/server/session";
 import { LogoutButton } from "@/components/logout-button";
+import { MainNav } from "@/components/main-nav";
 
 export default async function MainLayout({
   children,
@@ -14,8 +15,20 @@ export default async function MainLayout({
     redirect("/login");
   }
   return (
-    <div>
-      <header style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+    <div style={{ maxWidth: 960, margin: "0 auto", padding: "16px 20px" }}>
+      <header
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 12,
+          flexWrap: "wrap",
+          borderBottom: "1px solid #e5e5ea",
+          paddingBottom: 10,
+          marginBottom: 16,
+        }}
+      >
+        <MainNav />
         <LogoutButton />
       </header>
       {children}

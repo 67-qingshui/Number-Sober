@@ -2,13 +2,28 @@
 
 import { useEffect, useState } from "react";
 
+interface BackupFile {
+  name: string;
+  size: number;
+}
+
+declare global {
+  interface Window {
+    numberSober?: {
+      chooseBackupDir: () => Promise<{ canceled: boolean; dir?: string }>;
+      getBackupDir: () => Promise<{ dir: string }>;
+    };
+  }
+}
+
 export function SettingsView() {
   const [rate, setRate] = useState("1");
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const [backups, setBackups] = useState<{ name: string; size: number }[]>([]);
+  const [backups, setBackups] = useState<BackupFile[]>([]);
+  const [backupDir, setBackupDir] = useState("");
 
   async function load() {
     const [cRes, bRes] = await Promise.all([
@@ -22,6 +37,11 @@ export function SettingsView() {
     if (bRes.ok) {
       const d = await bRes.json();
       setBackups(d.backups ?? []);
+    }
+    // 从 Electron 主进程读取用户选择的备份文件夹
+    if (window.numberSober) {
+      const { dir } = await window.numberSober.getBackupDir();
+      setBackupDir(dir);
     }
     setLoading(false);
   }
@@ -61,6 +81,19 @@ export function SettingsView() {
     }
   }
 
+  async function handleChooseDir() {
+    setMessage("");
+    if (!window.numberSober) {
+      setMessage("仅在桌面应用中可选择文件夹(浏览器模式使用默认位置)");
+      return;
+    }
+    const result = await window.numberSober.chooseBackupDir();
+    if (!result.canceled && result.dir) {
+      setBackupDir(result.dir);
+      setMessage("备份文件夹已更新,立即生效");
+    }
+  }
+
   async function handleBackupNow() {
     setMessage("");
     const res = await fetch("/api/backup", { method: "POST" });
@@ -69,68 +102,91 @@ export function SettingsView() {
       setMessage(d.error ?? "备份失败");
       return;
     }
-    setMessage("备份完成");
+    setMessage(backupDir ? `已备份到 ${backupDir}` : "备份完成");
     await load();
   }
 
   return (
     <section>
-      <h1>系统设置</h1>
+      <h1>设置</h1>
       {loading ? (
-        <p>加载中…</p>
+        <p style={{ color: "var(--muted-foreground)" }}>加载中…</p>
       ) : (
         <>
-          <div>
+          {/* ---- 积分汇率 ---- */}
+          <div className="settings-card">
             <h2>积分汇率</h2>
-            <p>{`当前:1 积分 = ${rate} 日元`}</p>
-            <input
-              type="number"
-              min={0}
-              step="0.5"
-              value={rate}
-              onChange={(e) => setRate(e.target.value)}
-              placeholder="积分汇率(日元)"
-              aria-label="积分汇率(日元)"
-            />
-            <button type="button" onClick={handleSaveRate}>
-              保存汇率
-            </button>
+            <p className="settings-hint">
+              当前:1 积分 = {Number(rate).toLocaleString()} 日元
+            </p>
+            <div className="settings-row">
+              <input
+                type="number"
+                min={0}
+                step="0.5"
+                value={rate}
+                onChange={(e) => setRate(e.target.value)}
+                placeholder="积分汇率(日元)"
+                aria-label="积分汇率(日元)"
+              />
+              <button type="button" onClick={handleSaveRate}>
+                保存汇率
+              </button>
+            </div>
           </div>
-          <div>
+
+          {/* ---- 修改密码 ---- */}
+          <div className="settings-card">
             <h2>修改密码</h2>
-            <input
-              type="password"
-              value={oldPassword}
-              onChange={(e) => setOldPassword(e.target.value)}
-              placeholder="旧密码"
-              aria-label="旧密码"
-            />
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="新密码"
-              aria-label="新密码"
-            />
-            <button type="button" onClick={handleChangePassword}>
-              修改密码
-            </button>
+            <div className="settings-row">
+              <input
+                type="password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                placeholder="旧密码"
+                aria-label="旧密码"
+                autoComplete="current-password"
+              />
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="新密码"
+                aria-label="新密码"
+                autoComplete="new-password"
+              />
+              <button type="button" onClick={handleChangePassword}>
+                修改密码
+              </button>
+            </div>
           </div>
-          <div>
-            <h2>备份与还原</h2>
-            <button type="button" onClick={handleBackupNow}>
-              立即备份
-            </button>
-            {backups.length > 0 && (
+
+          {/* ---- 备份与还原 ---- */}
+          <div className="settings-card">
+            <h2>备份</h2>
+            <p className="settings-hint">
+              备份保存位置:
+              <strong>{backupDir || "默认(应用数据目录/backups)"}</strong>
+            </p>
+            <div className="settings-row">
+              <button type="button" onClick={handleChooseDir}>
+                选择备份文件夹…
+              </button>
+              <button type="submit" onClick={handleBackupNow}>
+                立即备份
+              </button>
+            </div>
+            {backups.length > 0 ? (
               <ul>
                 {backups.map((b) => (
-                  <li key={b.name}>
-                    {`${b.name}(${(b.size / 1024).toFixed(0)} KB)`}
-                  </li>
+                  <li key={b.name}>{`${b.name}(${(b.size / 1024).toFixed(0)} KB)`}</li>
                 ))}
               </ul>
+            ) : (
+              <p className="settings-hint">还没有备份文件</p>
             )}
           </div>
+
           {message && <p role="status">{message}</p>}
         </>
       )}

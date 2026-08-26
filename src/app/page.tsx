@@ -10,5 +10,6 @@ export default async function Home() {
   const store = await cookies();
   if (!hasAdmin()) return <AdminSetup />;
   if (!validateSession(store.get("ns_session")?.value)) redirect("/login");
-  return <HealthView status={getHealth()} />;
+  // 已登录:总览作为首页
+  redirect("/overview");
 }

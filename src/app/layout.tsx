@@ -1,3 +1,5 @@
+import "./globals.css";
+
 export const metadata = {
   title: "Number Sober 明算",
   description: "记账 · 分账 · 资产管理工具",

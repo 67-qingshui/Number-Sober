@@ -1,0 +1,256 @@
+:root {
+  /* Number Sober 设计令牌 — Apple 原生风 · 浅粉/浅绿 */
+  --bg: #f5f5f7;               /* macOS 系统灰背景 */
+  --card: #ffffff;             /* 卡片白 */
+  --foreground: #1d1d1f;       /* Apple 主文字黑 */
+  --muted-foreground: #6e6e73; /* 次级文字灰 */
+  --accent: #34c759;           /* iOS 绿(主操作) */
+  --accent-soft: #e3f5ec;      /* 浅绿底 */
+  --pink-soft: #fce7ee;        /* 浅粉底 */
+  --pink-strong: #e8a3bc;      /* 粉强调(积分) */
+  --border: rgba(0, 0, 0, 0.06);
+  --destructive: #ff3b30;      /* iOS 红 */
+  --blue: #007aff;             /* iOS 蓝(链接) */
+
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+/* ---------- 排版 ---------- */
+h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 20px;
+}
+h2 {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 24px 0 10px;
+}
+h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 16px 0 8px;
+}
+
+/* ---------- 表单控件(iOS 风格填充圆角) ---------- */
+input,
+select,
+textarea {
+  appearance: none;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--foreground);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  min-height: 40px;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3.5px rgba(52, 199, 89, 0.18);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted-foreground);
+  opacity: 0.75;
+}
+select {
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236e6e73' d='M1.4.6 6 5.2 10.6.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+/* ---------- 按钮(iOS 分级) ---------- */
+button {
+  appearance: none;
+  border: none;
+  border-radius: 10px;
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  min-height: 38px;
+  background: var(--accent-soft);
+  color: #1d7a3e;
+  transition: filter 0.15s ease, transform 0.08s ease, opacity 0.15s ease;
+}
+button:hover {
+  filter: brightness(0.96);
+}
+button:active {
+  transform: scale(0.98);
+}
+button[type="submit"] {
+  background: var(--accent);
+  color: #fff;
+}
+button[type="submit"]:hover {
+  filter: brightness(1.05);
+}
+/* 危险操作 */
+button[onclick*="delete"],
+button[onclick*="Delete"] {
+  color: var(--destructive);
+  background: rgba(255, 59, 48, 0.09);
+}
+
+/* ---------- 列表(iOS 分组列表风格) ---------- */
+ul {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+li {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 13px 16px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  animation: rise-in 0.28s cubic-bezier(0.25, 1, 0.4, 1) both;
+}
+li > div,
+li > ul {
+  width: 100%;
+}
+
+/* ---------- 表单区(卡片化) ---------- */
+form {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  margin-bottom: 8px;
+}
+fieldset {
+  border: none;
+  padding: 12px;
+  margin: 4px 0;
+  width: 100%;
+  background: var(--bg);
+  border-radius: 10px;
+}
+legend {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--muted-foreground);
+  padding: 0 4px;
+}
+
+/* ---------- 徽标 / 提示 ---------- */
+[role="alert"] {
+  background: rgba(255, 59, 48, 0.09);
+  color: var(--destructive);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+p[role="status"] {
+  background: var(--accent-soft);
+  color: #1d7a3e;
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: inline-block;
+  font-size: 14px;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------- 总览仪表盘卡片 ---------- */
+.overview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: 14px;
+  padding: 16px 18px;
+  text-decoration: none;
+  color: var(--foreground);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: transform 0.18s cubic-bezier(0.25, 1, 0.4, 1),
+    box-shadow 0.18s ease;
+  animation: rise-in 0.32s cubic-bezier(0.25, 1, 0.4, 1) both;
+}
+.overview-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.overview-card .ov-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+.overview-card .ov-value {
+  font-size: 15px;
+}
+
+/* ---------- 设置页分组卡片 ---------- */
+.settings-card {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+.settings-card h2 {
+  margin: 0 0 6px;
+}
+.settings-hint {
+  font-size: 13.5px;
+  color: var(--muted-foreground);
+  margin: 0 0 10px;
+}
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

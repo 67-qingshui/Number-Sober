@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const { spawn } = require("node:child_process");
 const net = require("node:net");
 const path = require("node:path");
@@ -7,6 +7,24 @@ const fs = require("node:fs");
 const DEV = !app.isPackaged;
 const HOST = "127.0.0.1";
 const PORT = 3100;
+
+// 用户配置(Electron userData 下的 JSON):记住备份文件夹选择
+function configPath() {
+  return path.join(app.getPath("userData"), "settings.json");
+}
+function readConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(configPath(), "utf8"));
+  } catch {
+    return {};
+  }
+}
+function writeConfig(patch) {
+  const cfg = { ...readConfig(), ...patch };
+  fs.mkdirSync(path.dirname(configPath()), { recursive: true });
+  fs.writeFileSync(configPath(), JSON.stringify(cfg, null, 2));
+  return cfg;
+}
 
 // asar 包内的路径无法被 spawn 执行,打包后必须用 asar.unpacked 的真实文件
 function unpackedPath(...segments) {
@@ -63,7 +81,11 @@ function startNextServer() {
         "app.asar.unpacked",
       );
   fs.mkdirSync(realCwd, { recursive: true });
-  const child = spawn(exec, base, { env, cwd: realCwd, stdio: "inherit" });
+  const child = spawn(exec, base, {
+    env: { ...env, NS_BACKUP_DIR: readConfig().backupDir || "" },
+    cwd: realCwd,
+    stdio: "inherit",
+  });
   child.on("exit", (code) => console.log("[next] exited with", code));
   child.on("error", (err) => console.error("[next] spawn error:", err.message));
   return child;
@@ -74,10 +96,34 @@ async function createWindow() {
     width: 1280,
     height: 800,
     title: "Number Sober 明算",
-    webPreferences: { contextIsolation: true, nodeIntegration: false },
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, "preload.cjs"),
+    },
   });
   await win.loadURL(`http://${HOST}:${PORT}`);
+  return win;
 }
+
+// ---------- IPC:备份文件夹选择 ----------
+ipcMain.handle("choose-backup-dir", async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(win, {
+    title: "选择备份保存的文件夹",
+    message: "备份文件(.db)将保存到这个文件夹",
+    properties: ["openDirectory", "createDirectory"],
+    defaultPath: readConfig().backupDir || app.getPath("documents"),
+  });
+  if (result.canceled || !result.filePaths[0]) return { canceled: true };
+  const dir = result.filePaths[0];
+  writeConfig({ backupDir: dir });
+  return { canceled: false, dir };
+});
+
+ipcMain.handle("get-backup-dir", () => ({
+  dir: readConfig().backupDir || "",
+}));
 
 app.whenReady().then(async () => {
   serverProc = startNextServer();
