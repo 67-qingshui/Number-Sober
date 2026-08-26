@@ -150,6 +150,19 @@ export const MIGRATIONS: Migration[] = [
           INSERT INTO meta (key, value) VALUES ('schema_version', '10')
             ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
   },
+  {
+    version: 11,
+    name: "create-model-prices",
+    sql: `CREATE TABLE IF NOT EXISTS model_prices (
+            model           TEXT PRIMARY KEY,
+            input_price     REAL NOT NULL,
+            output_price    REAL NOT NULL,
+            cache_hit_price REAL NOT NULL DEFAULT 0,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+          );
+          INSERT INTO meta (key, value) VALUES ('schema_version', '11')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {
