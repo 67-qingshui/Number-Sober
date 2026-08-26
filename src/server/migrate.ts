@@ -163,6 +163,22 @@ export const MIGRATIONS: Migration[] = [
           INSERT INTO meta (key, value) VALUES ('schema_version', '11')
             ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
   },
+  {
+    version: 12,
+    name: "create-points",
+    sql: `CREATE TABLE IF NOT EXISTS point_entries (
+            id           TEXT PRIMARY KEY,
+            entry_date   TEXT NOT NULL,
+            description  TEXT NOT NULL DEFAULT '',
+            amount       INTEGER NOT NULL,
+            available_at TEXT,
+            kind         TEXT NOT NULL DEFAULT 'earn',
+            created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+          );
+          CREATE INDEX IF NOT EXISTS idx_point_avail ON point_entries(available_at);
+          INSERT INTO meta (key, value) VALUES ('schema_version', '12')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {
