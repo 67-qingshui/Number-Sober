@@ -32,6 +32,8 @@ export function PointsManager() {
   const [loading, setLoading] = useState(true);
   const [redeemDesc, setRedeemDesc] = useState("");
   const [redeemAmount, setRedeemAmount] = useState("");
+  const [adjustDesc, setAdjustDesc] = useState("");
+  const [adjustAmount, setAdjustAmount] = useState("");
 
   async function load() {
     const [eRes, bRes] = await Promise.all([
@@ -113,6 +115,27 @@ export function PointsManager() {
     await load();
   }
 
+  async function handleAdjust() {
+    setError("");
+    const res = await fetch("/api/points/adjust", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: new Date().toISOString().slice(0, 10),
+        description: adjustDesc,
+        amount: Number(adjustAmount),
+      }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error ?? "调整失败");
+      return;
+    }
+    setAdjustDesc("");
+    setAdjustAmount("");
+    await load();
+  }
+
   return (
     <section>
       <h1>积分</h1>
@@ -191,6 +214,24 @@ export function PointsManager() {
             />
             <button type="button" onClick={handleRedeem}>
               确认抵扣
+            </button>
+          </div>
+          <div>
+            <input
+              value={adjustDesc}
+              onChange={(e) => setAdjustDesc(e.target.value)}
+              placeholder="调整描述(正=增加,负=扣减/转出)"
+              aria-label="调整描述"
+            />
+            <input
+              type="number"
+              value={adjustAmount}
+              onChange={(e) => setAdjustAmount(e.target.value)}
+              placeholder="调整积分"
+              aria-label="调整积分"
+            />
+            <button type="button" onClick={handleAdjust}>
+              确认调整
             </button>
           </div>
         </div>

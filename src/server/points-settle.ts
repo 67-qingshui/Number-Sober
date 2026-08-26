@@ -28,7 +28,7 @@ export interface Balance {
   pending: number; // 待入账
 }
 
-function balanceInner(db: Database.Database): Balance {
+export function balanceInner(db: Database.Database): Balance {
   const avail = db
     .prepare(
       // 已可用 = 所有 available_at 为空的条目之和(含抵扣的负数)

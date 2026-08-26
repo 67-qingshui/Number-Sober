@@ -115,6 +115,44 @@ describe("积分管理组件", () => {
     ).toBeInTheDocument();
   });
 
+  it("手动调整:提交正负金额并刷新余额", async () => {
+    const fetchMock = vi.fn(async (url: string, opts?: RequestInit) => {
+      if (url === "/api/points" && (!opts || opts.method === "GET"))
+        return { ok: true, json: async () => ENTRIES };
+      if (url === "/api/points/balance" && (!opts || opts.method === "GET"))
+        return {
+          ok: true,
+          json: async () => ({ available: 300, pending: 400 }),
+        };
+      if (url === "/api/points/adjust" && opts?.method === "POST")
+        return {
+          ok: true,
+          json: async () => ({ balance: { available: 300, pending: 400 } }),
+        };
+      return { ok: false, json: async () => ({ error: "未知" }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PointsManager />);
+    const user = userEvent.setup();
+    await screen.findByLabelText("调整描述");
+    await user.type(screen.getByLabelText("调整描述"), "活动补偿");
+    await user.type(screen.getByLabelText("调整积分"), "200");
+    await user.click(screen.getByRole("button", { name: "确认调整" }));
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls.filter(
+        (c) =>
+          c[0] === "/api/points/adjust" &&
+          (c[1] as RequestInit)?.method === "POST",
+      );
+      expect(calls.length).toBe(1);
+      const body = JSON.parse((calls[0][1] as RequestInit).body as string);
+      expect(body.amount).toBe(200);
+    });
+    expect(
+      await screen.findByText((c) => c.includes("可用 300")),
+    ).toBeInTheDocument();
+  });
+
   it("点击结算按钮调用结算 API 并刷新余额", async () => {
     const fetchMock = vi.fn(async (url: string, opts?: RequestInit) => {
       if (url === "/api/points" && (!opts || opts.method === "GET"))
