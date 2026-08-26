@@ -12,8 +12,14 @@ interface PointEntry {
   createdAt: string;
 }
 
+interface Balance {
+  available: number;
+  pending: number;
+}
+
 export function PointsManager() {
   const [entries, setEntries] = useState<PointEntry[]>([]);
+  const [balance, setBalance] = useState<Balance | null>(null);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -25,8 +31,12 @@ export function PointsManager() {
   const [loading, setLoading] = useState(true);
 
   async function load() {
-    const res = await fetch("/api/points");
-    if (res.ok) setEntries(await res.json());
+    const [eRes, bRes] = await Promise.all([
+      fetch("/api/points"),
+      fetch("/api/points/balance"),
+    ]);
+    if (eRes.ok) setEntries(await eRes.json());
+    if (bRes.ok) setBalance(await bRes.json());
     setLoading(false);
   }
 
@@ -63,6 +73,19 @@ export function PointsManager() {
     );
     setDescription("");
     setAmount("");
+    await load();
+  }
+
+  async function handleSettle() {
+    setError("");
+    const res = await fetch("/api/points/balance", { method: "POST" });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error ?? "结算失败");
+      return;
+    }
+    const d = await res.json();
+    if (d.settled > 0) setLastEarnback(`已到账 ${d.settled} 积分`);
     await load();
   }
 
@@ -119,6 +142,16 @@ export function PointsManager() {
       </form>
       {lastEarnback && <p>{lastEarnback}</p>}
       {error && <p role="alert">{error}</p>}
+      {balance && (
+        <div>
+          <p>
+            {`可用 ${balance.available.toLocaleString()} · 待入账 ${balance.pending.toLocaleString()}`}{" "}
+            <button type="button" onClick={handleSettle}>
+              结算到期积分
+            </button>
+          </p>
+        </div>
+      )}
       {loading ? (
         <p>加载中…</p>
       ) : (
